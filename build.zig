@@ -47,10 +47,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     exe.linkLibC();
-    exe.addCSourceFile(.{
-        .file = b.path("lib/oracle/odpi-5.4.1/embed/dpi.c"),
-    });
-    exe.addIncludePath(b.path("lib/oracle/odpi-5.4.1/include"));
+    exe.addIncludePath(b.path("lib/oracle/sdk/include"));
 
     exe.root_module.addImport("zdt", zdt.module("zdt"));
 
@@ -89,10 +86,7 @@ pub fn build(b: *std.Build) void {
     });
     exe_unit_tests.linkLibC();
 
-    exe_unit_tests.addCSourceFile(.{
-        .file = b.path("lib/oracle/odpi-5.4.1/embed/dpi.c"),
-    });
-    exe_unit_tests.addIncludePath(b.path("lib/oracle/odpi-5.4.1/include"));
+    exe_unit_tests.addIncludePath(b.path("lib/oracle/sdk/include"));
     exe_unit_tests.root_module.addImport("zdt", zdt.module("zdt"));
 
     const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);

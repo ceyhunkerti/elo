@@ -1,3 +1,3 @@
 pub const c = @cImport({
-    @cInclude("dpi.h");
+    @cInclude("oci.h");
 });
