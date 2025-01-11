@@ -359,9 +359,9 @@ test "batchInsert" {
     };
     try conn.execute("create table test_table (id number, name varchar2(255))");
 
-    var dpi_var_array: []?*cc.dpiVar = try allocator.alloc(?*cc.dpiVar, 2);
-    var id_data: [*c]cc.dpiData = undefined;
-    var name_data: [*c]cc.dpiData = undefined;
+    const column_count = 2;
+    var dpi_var_array: []?*cc.dpiVar = try allocator.alloc(?*cc.dpiVar, column_count);
+    var data_array: []?[*c]cc.dpiData = try allocator.alloc(?[*c]cc.dpiData, column_count);
 
     // Create variable for IDs
     if (cc.dpiConn_newVar(
@@ -374,7 +374,7 @@ test "batchInsert" {
         0,
         null,
         &dpi_var_array[0],
-        &id_data,
+        &data_array[0].?,
     ) < 0) {
         std.debug.print("Failed to create variable with error: {s}\n", .{conn.getErrorMessage()});
         unreachable;
@@ -394,7 +394,7 @@ test "batchInsert" {
         0,
         null,
         &dpi_var_array[1],
-        &name_data,
+        &data_array[1].?,
     ) < 0) {
         std.debug.print("Failed to create variable with error: {s}\n", .{conn.getErrorMessage()});
         unreachable;
@@ -405,15 +405,15 @@ test "batchInsert" {
 
     const insert_sql = "insert into test_table (id, name) values (:1, :2)";
     const stmt = try conn.prepareStatement(insert_sql);
-    for (0..2) |i| {
+    for (0..column_count) |i| {
         if (cc.dpiStmt_bindByPos(stmt.stmt, @as(u32, @intCast(i)) + 1, dpi_var_array[i]) < 0) {
             unreachable;
         }
     }
 
     // Set first row
-    id_data[0].isNull = 0;
-    id_data[0].value.asInt64 = 1;
+    data_array[0].?[0].isNull = 0;
+    data_array[0].?[0].value.asInt64 = 1;
 
     const n1 = "name1";
     if (cc.dpiVar_setFromBytes(dpi_var_array[1].?, 0, n1.ptr, 5) < 0) {
@@ -422,8 +422,8 @@ test "batchInsert" {
     }
 
     // Set second row
-    id_data[1].isNull = 0;
-    id_data[1].value.asInt64 = 2;
+    data_array[0].?[1].isNull = 0;
+    data_array[0].?[1].value.asInt64 = 2;
 
     const n2 = "name2";
     if (cc.dpiVar_setFromBytes(dpi_var_array[1].?, 1, n2.ptr, 5) < 0) {
@@ -435,7 +435,7 @@ test "batchInsert" {
         unreachable;
     }
 
-    conn.commit() catch unreachable;
+    try conn.execute("commit");
 
     // if (cc.dpiVar_setFromInt64(id_var, @intCast(i), ids[i]) < 0) {
     //         try checkError(context, "setting id value");
