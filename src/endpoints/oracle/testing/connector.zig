@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const c = @import("../c.zig").c;
-const Connection = @import("../Connection.zig");
+const Connector = @import("../Connector.zig");
 
 const TestConnectionError = error{MissingTestEnvironmentVariable};
 
@@ -47,16 +47,13 @@ pub fn getTestConnectionParams() !TestConnectionParams {
     return TestConnectionParams.init(username, password, connection_string, auth_mode);
 }
 
-pub fn getTestConnection(allocator: std.mem.Allocator) !Connection {
+pub fn getTestConnector(allocator: std.mem.Allocator) !Connector {
     const params = try getTestConnectionParams();
-    var connection = Connection.init(allocator);
-
-    try connection.create_context();
-    try connection.connect(
+    return Connector.init(
+        allocator,
         params.username,
         params.password,
         params.connection_string,
-        @intCast(c.DPI_MODE_AUTH_SYSDBA),
+        .SYSDBA,
     );
-    return connection;
 }

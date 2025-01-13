@@ -2,95 +2,138 @@ const std = @import("std");
 const debug = std.debug;
 const Allocator = std.mem.Allocator;
 const testing = std.testing;
-
+const Context = @import("Context.zig");
 const t = @import("testing/testing.zig");
+const Statement = @import("Statement.zig");
 
 const c = @import("c.zig").c;
-pub const Statement = @import("Statement.zig");
+// pub const Statement = @import("Statement.zig");
 
 const Self = @This();
 
-allocator: Allocator,
-conn: ?*c.dpiConn = null,
-dpi_context: ?*c.dpiContext = null,
+pub const ConnectionError = error{
+    UnknownPrivilegeMode,
 
-const ConnectionError = error{
     FailedToCreateConnection,
-    FailedToCreateContext,
     FailedToReleaseConnection,
     FailedToDestroyContext,
     FailedToInitializeConnCreateParams,
-};
 
-const TransactionError = error{
     FailedToCommit,
     FailedToRollback,
 };
 
-pub fn init(allocator: Allocator) Self {
+pub const Privilege = enum {
+    SYSDBA,
+    SYSOPER,
+    SYSASM,
+    SYSBACKUP,
+    SYSDG,
+    SYSKM,
+    SYSRAC,
+    DEFAULT,
+
+    pub fn toDpi(self: Privilege) c.dpiAuthMode {
+        return switch (self) {
+            .SYSDBA => c.DPI_MODE_AUTH_SYSDBA,
+            .SYSOPER => c.DPI_MODE_AUTH_SYSOPER,
+            .SYSASM => c.DPI_MODE_AUTH_SYSASM,
+            .SYSBACKUP => c.DPI_MODE_AUTH_SYSBKP,
+            .SYSDG => c.DPI_MODE_AUTH_SYSDGD,
+            .SYSKM => c.DPI_MODE_AUTH_SYSKMT,
+            .SYSRAC => c.DPI_MODE_AUTH_SYSRAC,
+            .DEFAULT => c.DPI_MODE_AUTH_DEFAULT,
+        };
+    }
+    pub fn fromString(s: ?[]const u8) !Privilege {
+        if (s) |str| {
+            inline for (@typeInfo(Privilege).Enum.fields) |field| {
+                if (std.mem.eql(u8, field.name, str)) {
+                    return @field(Privilege, field.name);
+                }
+            }
+            return error.UnknownPrivilegeMode;
+        } else {
+            return Privilege.DEFAULT;
+        }
+    }
+};
+
+allocator: Allocator,
+dpi_conn: ?*c.dpiConn = null,
+context: Context = undefined,
+
+username: []const u8 = "",
+password: []const u8 = "",
+connection_string: []const u8 = "",
+privilege: Privilege = .DEFAULT,
+
+pub fn init(
+    allocator: Allocator,
+    username: []const u8,
+    password: []const u8,
+    connection_string: []const u8,
+    privilege: Privilege,
+) Self {
     return Self{
-        .conn = null,
-        .dpi_context = null,
         .allocator = allocator,
+        .username = username,
+        .password = password,
+        .connection_string = connection_string,
+        .privilege = privilege,
     };
 }
-
 pub fn deinit(self: *Self) !void {
-    if (self.conn != null) {
-        if (c.dpiConn_release(self.conn) < 0) {
-            debug.print("Failed to release connection: {s}\n", .{self.getErrorMessage()});
-            return ConnectionError.FailedToReleaseConnection;
+    if (self.dpi_conn != null) {
+        if (c.dpiConn_release(self.dpi_conn) < 0) {
+            return error.FailedToReleaseConnection;
         }
     }
 }
 
-pub fn create_context(self: *Self) ConnectionError!void {
-    if (self.dpi_context != null) {
-        return;
-    }
-    var err: c.dpiErrorInfo = undefined;
-    if (c.dpiContext_createWithParams(c.DPI_MAJOR_VERSION, c.DPI_MINOR_VERSION, null, &self.dpi_context, &err) < 0) {
-        debug.print("Failed to create context with error: {s}\n", .{err.message});
-        return ConnectionError.FailedToCreateContext;
-    }
+fn createContext(self: *Self) !void {
+    self.context = Context{};
+    try self.context.create();
 }
 
-fn connCreateParams(self: *Self, auth_mode_int: u32) ConnectionError!c.dpiConnCreateParams {
+fn dpiConnCreateParams(self: *Self) !c.dpiConnCreateParams {
     var params: c.dpiConnCreateParams = undefined;
-    if (c.dpiContext_initConnCreateParams(self.dpi_context, &params) < 0) {
-        debug.print("Failed to initialize connection create params\n", .{});
-        return ConnectionError.FailedToInitializeConnCreateParams;
+    if (c.dpiContext_initConnCreateParams(self.context.dpi_context, &params) < 0) {
+        return error.FailedToInitializeConnCreateParams;
     }
-    params.authMode = auth_mode_int;
-
+    params.authMode = self.privilege.toDpi();
     return params;
 }
 
-pub fn connect(
-    self: *Self,
-    username: []const u8,
-    password: []const u8,
-    connection_string: []const u8,
-    auth_mode_int: u32,
-) ConnectionError!void {
-    try self.create_context();
+pub fn errorMessage(self: *Self) []const u8 {
+    return self.context.errorMessage();
+}
 
-    var params = try self.connCreateParams(auth_mode_int);
+pub fn connect(self: *Self) !void {
+    try self.createContext();
+    var create_params = try self.dpiConnCreateParams();
+
+    var dpi_conn: ?*c.dpiConn = null;
     if (c.dpiConn_create(
-        self.dpi_context,
-        username.ptr,
-        @intCast(username.len),
-        password.ptr,
-        @intCast(password.len),
-        connection_string.ptr,
-        @intCast(connection_string.len),
+        self.context.dpi_context,
+        self.username.ptr,
+        @intCast(self.username.len),
+        self.password.ptr,
+        @intCast(self.password.len),
+        self.connection_string.ptr,
+        @intCast(self.connection_string.len),
         null,
-        &params,
-        &self.conn,
+        &create_params,
+        &dpi_conn,
     ) < 0) {
-        debug.print("Failed to create connection with error: {s}\n", .{self.getErrorMessage()});
-        return ConnectionError.FailedToCreateConnection;
+        debug.print("Failed to create connection with error: {s}\n", .{self.errorMessage()});
+        return error.FailedToCreateConnection;
     }
+
+    if (dpi_conn == null) {
+        return error.FailedToCreateConnection;
+    }
+    self.dpi_conn = dpi_conn;
 }
 
 pub fn createStatement(self: *Self) Statement {
@@ -108,32 +151,32 @@ pub fn execute(self: *Self, sql: []const u8) !void {
     try stmt.execute();
 }
 
-pub fn commit(self: *Self) TransactionError!void {
-    if (c.dpiConn_commit(self.conn) < 0) {
+pub fn commit(self: *Self) !void {
+    if (c.dpiConn_commit(self.dpi_conn) < 0) {
         debug.print("Failed to commit with error: {s}\n", .{self.getErrorMessage()});
-        return TransactionError.FailedToCommit;
+        return error.FailedToCommit;
     }
 }
-pub fn rollback(self: *Self) TransactionError!void {
-    if (c.dpiConn_rollback(self.conn) < 0) {
-        debug.print("Failed to rollback with error: {s}\n", .{self.getErrorMessage()});
-        return TransactionError.FailedToRollback;
-    }
-}
+// pub fn rollback(self: *Self) !void {
+//     if (c.dpiConn_rollback(self.dpi_conn) < 0) {
+//         debug.print("Failed to rollback with error: {s}\n", .{self.getErrorMessage()});
+//         return error.FailedToRollback;
+//     }
+// }
 
-pub fn getErrorMessage(self: *Self) []const u8 {
-    var err: c.dpiErrorInfo = undefined;
-    c.dpiContext_getError(self.dpi_context, &err);
-    return std.mem.span(err.message);
-}
+// pub fn getErrorMessage(self: *Self) []const u8 {
+//     var err: c.dpiErrorInfo = undefined;
+//     c.dpiContext_getError(self.dpi_context, &err);
+//     return std.mem.span(err.message);
+// }
 
 test "connect" {
-    var conn = try t.getTestConnection(testing.allocator);
-    try conn.deinit();
+    var conn = try t.getTestConnector(testing.allocator);
+    try conn.connect();
 }
 
-test "create context" {
-    const allocator = std.testing.allocator;
-    var connection = Self.init(allocator);
-    try connection.create_context();
-}
+// test "create context" {
+//     const allocator = std.testing.allocator;
+//     var connection = Self.init(allocator);
+//     try connection.create_context();
+// }

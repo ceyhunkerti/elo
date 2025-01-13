@@ -49,8 +49,6 @@ pub const Query = struct {
             .columns = try allocator.alloc(Column, stmt.column_count),
         };
 
-        // std.debug.print("\ncolc: {d}\n", .{stmt.column_count});
-
         for (md.columns, 1..) |*column, i| {
             column.* = try Column.init(allocator, stmt, @intCast(i));
         }
@@ -60,7 +58,7 @@ pub const Query = struct {
     pub fn columnNames(self: Query) ![]const []const u8 {
         var names = try self.allocator.alloc([]const u8, self.columns.len);
         for (self.columns, 0..) |column, i| {
-            names[i] = column.name;
+            names[i] = self.allocator.dupe(u8, column.name) catch unreachable;
         }
         return names;
     }
