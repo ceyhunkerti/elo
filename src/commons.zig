@@ -49,3 +49,11 @@ pub const FieldValue = union(FieldType) {
 };
 
 pub const Record = []FieldValue;
+
+pub fn RecordAsMap(allocator: std.mem.Allocator, names: []const []const u8, record: Record) StringHashMap(FieldValue) {
+    var map = StringHashMap(FieldValue).init(allocator);
+    for (names, record) |name, value| {
+        map.put(name, value) catch unreachable;
+    }
+    return map;
+}

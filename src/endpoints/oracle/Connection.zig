@@ -146,9 +146,9 @@ pub fn prepareStatement(self: *Self, sql: []const u8) !Statement {
     return stmt;
 }
 
-pub fn execute(self: *Self, sql: []const u8) !void {
+pub fn execute(self: *Self, sql: []const u8) !u32 {
     var stmt = try self.prepareStatement(sql);
-    try stmt.execute();
+    return try stmt.execute();
 }
 
 pub fn commit(self: *Self) !void {
@@ -171,7 +171,7 @@ pub fn commit(self: *Self) !void {
 // }
 
 test "connect" {
-    var conn = try t.getTestConnector(testing.allocator);
+    var conn = try t.getTestConnection(testing.allocator);
     try conn.connect();
 }
 

@@ -1,1 +1,3 @@
-pub const getTestConnector = @import("connector.zig").getTestConnector;
+const connection = @import("connection.zig");
+pub const getTestConnection = connection.getTestConnection;
+pub const getTestConnectionParams = connection.getTestConnectionParams;

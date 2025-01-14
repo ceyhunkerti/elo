@@ -7,11 +7,14 @@ const FieldValue = @import("../../../commons.zig").FieldValue;
 
 allocator: Allocator = undefined,
 index: u32,
-name: []const u8 = null,
+name: []const u8 = undefined,
 nullable: bool = true,
 oracle_type_num: c.dpiOracleTypeNum = undefined,
 native_type_num: c.dpiNativeTypeNum = undefined,
-size: u32 = 0,
+length: u32 = 0,
+precision: ?u32 = null,
+scale: ?u32 = null,
+default: ?[]const u8 = null,
 
 pub fn fromStatement(allocator: Allocator, index: u32, stmt: *Statement) !Self {
     var info: c.dpiQueryInfo = undefined;

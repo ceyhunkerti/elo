@@ -1,18 +1,12 @@
 const std = @import("std");
 const c = @import("c.zig").c;
+const Privilege = @import("./Connection.zig").Privilege;
 
 pub const ConnectionOptions = struct {
     connection_string: []const u8,
     username: []const u8,
     password: []const u8,
-    role: []const u8,
-
-    pub fn authMode(self: ConnectionOptions) c_int {
-        if (std.mem.eql(u8, self.role, "SYSDBA")) {
-            return c.DPI_MODE_AUTH_SYSDBA;
-        }
-        return c.DPI_MODE_AUTH_DEFAULT;
-    }
+    privilege: Privilege = .DEFAULT,
 };
 
 pub const SourceOptions = struct {

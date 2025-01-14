@@ -10,7 +10,7 @@ const checkError = @import("./utils.zig").checkError;
 const Self = @This();
 
 allocator: Allocator = undefined,
-connection: *Connection = null,
+connection: *Connection = undefined,
 dpi_stmt: ?*c.dpiStmt = null,
 
 pub const StatementError = error{

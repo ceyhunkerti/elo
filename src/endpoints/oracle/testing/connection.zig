@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const c = @import("../c.zig").c;
-const Connector = @import("../Connector.zig");
+const Connection = @import("../Connection.zig");
 
 const TestConnectionError = error{MissingTestEnvironmentVariable};
 
@@ -9,21 +9,7 @@ pub const TestConnectionParams = struct {
     username: []const u8,
     password: []const u8,
     connection_string: []const u8,
-    auth_mode: []const u8,
-
-    pub fn init(
-        username: []const u8,
-        password: []const u8,
-        connection_string: []const u8,
-        auth_mode: []const u8,
-    ) TestConnectionParams {
-        return .{
-            .username = username,
-            .password = password,
-            .connection_string = connection_string,
-            .auth_mode = auth_mode,
-        };
-    }
+    privilege: Connection.Privilege,
 };
 
 pub fn getTestConnectionParams() !TestConnectionParams {
@@ -44,16 +30,21 @@ pub fn getTestConnectionParams() !TestConnectionParams {
         return TestConnectionError.MissingTestEnvironmentVariable;
     };
 
-    return TestConnectionParams.init(username, password, connection_string, auth_mode);
+    return TestConnectionParams{
+        .username = username,
+        .password = password,
+        .connection_string = connection_string,
+        .privilege = try Connection.Privilege.fromString(auth_mode),
+    };
 }
 
-pub fn getTestConnector(allocator: std.mem.Allocator) !Connector {
+pub fn getTestConnection(allocator: std.mem.Allocator) !Connection {
     const params = try getTestConnectionParams();
-    return Connector.init(
+    return Connection.init(
         allocator,
         params.username,
         params.password,
         params.connection_string,
-        .SYSDBA,
+        params.privilege,
     );
 }
