@@ -62,14 +62,16 @@ pub const ColumnScript = struct {
             }
             break :brk "(255)";
         };
+
         const data_type = if (field.type) |tp| switch (tp) {
             .String => "varchar",
             .Int => "number",
+            .Number => "number",
             .Double => "number",
             .Boolean => "number",
             .TimeStamp => "timestamp",
             else => unreachable,
-        };
+        } else "varchar";
 
         return std.mem.trimRight(u8, allocPrint(
             allocator,
@@ -104,23 +106,25 @@ test CreateTableScript {
     defer arena.deinit();
     const allocator = arena.allocator();
 
+    var metadata = Metadata{
+        .name = "table_1",
+        .fields = &.{
+            .{
+                .index = 1,
+                .type = .String,
+                .length = 255,
+            },
+            .{
+                .index = 2,
+                .name = "column_b",
+                .type = .String,
+                .length = 255,
+            },
+        },
+    };
+
     try testing.expectEqualStrings(
         "create table table_1 (col_1 varchar(255),\ncolumn_b varchar(255))",
-        try CreateTableScript.fromMetadata(allocator, .{
-            .name = "table_1",
-            .fields = &.{
-                .{
-                    .index = 1,
-                    .type = .String,
-                    .length = 255,
-                },
-                .{
-                    .index = 2,
-                    .name = "column_b",
-                    .type = .String,
-                    .length = 255,
-                },
-            },
-        }),
+        try CreateTableScript.fromMetadata(allocator, &metadata),
     );
 }

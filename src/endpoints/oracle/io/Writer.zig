@@ -88,6 +88,7 @@ test "Writer.prepareTable" {
             .privilege = tp.privilege,
         },
         .table = "TEST_TABLE",
+        .mode = .Create,
     };
 
     var writer = Self.init(allocator, options);
@@ -98,7 +99,7 @@ test "Writer.prepareTable" {
     try writer.prepareTable(&q);
 
     const is_table_exist = try utils.isTableExist(writer.conn, options.table.?);
-    std.testing.expect(is_table_exist);
+    try std.testing.expect(is_table_exist);
 }
 
 pub fn buildInsertQuery(self: Self) ![]const u8 {
