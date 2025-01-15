@@ -79,25 +79,26 @@ pub fn fetch(self: *Self, column_count: u32) !?Record {
             return error.FetchStatementError;
         }
         var value: FieldValue = undefined;
-
-        if (data.?.isNull == 0) {
-            switch (native_type_num) {
-                c.DPI_NATIVE_TYPE_BYTES => {
-                    value = .{
-                        .String = try self.allocator.dupe(u8, data.?.value.asBytes.ptr[0..data.?.value.asBytes.length]),
-                    };
-                },
-                c.DPI_NATIVE_TYPE_FLOAT, c.DPI_NATIVE_TYPE_DOUBLE => {
-                    value = .{ .Double = data.?.value.asDouble };
-                },
-                c.DPI_NATIVE_TYPE_INT64 => {
-                    value = .{ .Int = data.?.value.asInt64 };
-                },
-                c.DPI_NATIVE_TYPE_BOOLEAN => {
-                    value = .{ .Boolean = data.?.value.asBoolean > 0 };
-                },
-                c.DPI_NATIVE_TYPE_TIMESTAMP => {
-                    // todo
+        switch (native_type_num) {
+            c.DPI_NATIVE_TYPE_BYTES => {
+                value = .{
+                    .String = if (data.?.isNull != 0) null else try self.allocator.dupe(u8, data.?.value.asBytes.ptr[0..data.?.value.asBytes.length]),
+                };
+            },
+            c.DPI_NATIVE_TYPE_FLOAT, c.DPI_NATIVE_TYPE_DOUBLE => {
+                value = .{ .Double = if (data.?.isNull != 0) null else data.?.value.asDouble };
+            },
+            c.DPI_NATIVE_TYPE_INT64 => {
+                value = .{ .Int = if (data.?.isNull != 0) null else data.?.value.asInt64 };
+            },
+            c.DPI_NATIVE_TYPE_BOOLEAN => {
+                value = .{ .Boolean = if (data.?.isNull != 0) null else data.?.value.asBoolean > 0 };
+            },
+            c.DPI_NATIVE_TYPE_TIMESTAMP => {
+                // todo
+                if (data.?.isNull != 0) {
+                    value = .{ .TimeStamp = null };
+                } else {
                     const ts = data.?.value.asTimestamp;
                     value = .{ .TimeStamp = .{
                         .day = ts.day,
@@ -107,11 +108,11 @@ pub fn fetch(self: *Self, column_count: u32) !?Record {
                         .second = ts.second,
                         .year = @intCast(ts.year),
                     } };
-                },
-                else => {
-                    return error.FetchStatementError;
-                },
-            }
+                }
+            },
+            else => {
+                return error.FetchStatementError;
+            },
         }
         row[i - 1] = value;
     }

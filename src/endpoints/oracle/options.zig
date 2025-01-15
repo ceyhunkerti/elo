@@ -13,15 +13,19 @@ pub const SourceOptions = struct {
     connection: ConnectionOptions,
     fetch_size: u64 = 10_000,
     sql: []const u8,
+
+    // pub fn validate() !void {} // TODO
 };
 
 pub const SinkOptions = struct {
     connection: ConnectionOptions,
-    table: []const u8,
-    mode: ?enum { Append, Truncate, Create } = .Append,
+    table: ?[]const u8,
     sql: ?[]const u8 = null,
+    mode: ?enum { Append, Truncate, Create } = .Append,
     create_sql: ?[]const u8 = null,
     batch_size: u64 = 10_000,
+
+    // pub fn validate() !void {} // TODO
 };
 
 pub const Options = union(enum) {

@@ -16,6 +16,11 @@ precision: ?u32 = null,
 scale: ?u32 = null,
 default: ?[]const u8 = null,
 
+pub fn deinit(self: *Self) void {
+    _ = self;
+    // todo
+}
+
 pub fn fromStatement(allocator: Allocator, index: u32, stmt: *Statement) !Self {
     var info: c.dpiQueryInfo = undefined;
     if (c.dpiStmt_getQueryInfo(stmt.stmt, index, &info) < 0) {
