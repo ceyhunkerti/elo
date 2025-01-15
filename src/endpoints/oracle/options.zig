@@ -21,7 +21,7 @@ pub const SinkOptions = struct {
     connection: ConnectionOptions,
     table: ?[]const u8,
     sql: ?[]const u8 = null,
-    mode: ?enum { Append, Truncate, Create } = .Append,
+    mode: enum { Append, Truncate, Create } = .Append,
     create_sql: ?[]const u8 = null,
     batch_size: u64 = 10_000,
 

@@ -86,7 +86,7 @@ pub const ColumnScript = struct {
 };
 
 pub const CreateTableScript = struct {
-    pub fn fromMetadata(allocator: Allocator, metadata: Metadata) ![]const u8 {
+    pub fn fromMetadata(allocator: Allocator, metadata: *const Metadata) ![]const u8 {
         const table_name = metadata.name;
         const columns: [][]const u8 = allocator.alloc([]const u8, metadata.fields.len) catch unreachable;
         for (metadata.fields, 0..) |field, i| {

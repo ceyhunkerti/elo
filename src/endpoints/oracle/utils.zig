@@ -2,6 +2,9 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const ConnectionOptions = @import("./options.zig").ConnectionOptions;
 const Connection = @import("./Connection.zig");
+const MessageQueue = @import("../../queue.zig").MessageQueue;
+const Metadata = @import("../../commons.zig").Metadata;
+
 const c = @import("c.zig").c;
 
 const Error = error{
@@ -48,7 +51,7 @@ pub fn dropTable(conn: *Connection, table: []const u8) !void {
 pub fn executeCreateTable(conn: *Connection, sql: []const u8) !void {
     _ = conn.execute(sql) catch |err| {
         if (std.mem.indexOf(u8, conn.errorMessage(), "ORA-00955")) |_| {
-            return Error.NameAlreadyInUse;
+            return error.NameAlreadyInUse;
         }
         return err;
     };
@@ -103,5 +106,16 @@ pub fn toDpiNativeTypeNum(type_name: []const u8) c.dpiNativeTypeNum {
     } else {
         // todo
         unreachable;
+    }
+}
+
+pub fn expectMetadata(q: *MessageQueue) !*const Metadata {
+    const message = q.get();
+    switch (message.data) {
+        .Metadata => |m| return m,
+        else => {
+            q.put(message);
+            return error.MetadataNotReceived;
+        },
     }
 }

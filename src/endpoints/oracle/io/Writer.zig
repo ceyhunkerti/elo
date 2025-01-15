@@ -1,8 +1,10 @@
 const std = @import("std");
 const Connection = @import("../Connection.zig");
 const SinkOptions = @import("../options.zig").SinkOptions;
-const MessageQueue = @import("../../../queue.zig").MessageQueue;
+const queue = @import("../../../queue.zig");
 const TableMetadata = @import("../metadata/TableMetadata.zig");
+const CreateTableScript = @import("../metadata/script.zig").CreateTableScript;
+const commons = @import("../../../commons.zig");
 const t = @import("../testing/testing.zig");
 
 const utils = @import("../utils.zig");
@@ -28,6 +30,75 @@ pub fn deinit(self: Self) !void {
 
 pub fn connect(self: Self) !void {
     return try self.conn.connect();
+}
+
+pub fn prepareTable(self: Self, q: *queue.MessageQueue) !void {
+    switch (self.options.mode) {
+        .Append => return,
+        .Truncate => try utils.truncateTable(self.conn, self.options.table.?),
+        .Create => {
+            if (self.options.create_sql) |create_sql| {
+                try utils.executeCreateTable(self.conn, create_sql);
+                return;
+            }
+            const md = try utils.expectMetadata(q);
+            try utils.dropTableIfExists(self.conn, self.options.table.?);
+            try utils.executeCreateTable(
+                self.conn,
+                try CreateTableScript.fromMetadata(self.allocator, md),
+            );
+        },
+    }
+}
+
+test "Writer.prepareTable" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const fields = [2]commons.Field{
+        .{
+            .index = 1,
+            .name = "ID",
+            .type = commons.FieldType.Number,
+            .default = null,
+        },
+        .{
+            .index = 2,
+            .name = "NAME",
+            .type = commons.FieldType.String,
+            .default = null,
+        },
+    };
+    const md = commons.Metadata{
+        .name = "TEST_TABLE",
+        .fields = &fields,
+    };
+    const message = queue.Message{ .Metadata = &md };
+    var q = queue.MessageQueue.init();
+    var node = queue.MessageQueue.Node{ .data = message };
+    q.put(&node);
+
+    const tp = try t.getTestConnectionParams();
+    const options = SinkOptions{
+        .connection = .{
+            .connection_string = tp.connection_string,
+            .username = tp.username,
+            .password = tp.password,
+            .privilege = tp.privilege,
+        },
+        .table = "TEST_TABLE",
+    };
+
+    var writer = Self.init(allocator, options);
+    try writer.connect();
+
+    try utils.dropTableIfExists(writer.conn, options.table.?);
+
+    try writer.prepareTable(&q);
+
+    const is_table_exist = try utils.isTableExist(writer.conn, options.table.?);
+    std.testing.expect(is_table_exist);
 }
 
 pub fn buildInsertQuery(self: Self) ![]const u8 {
