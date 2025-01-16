@@ -46,9 +46,30 @@ pub const FieldValue = union(FieldType) {
     Array: ?[]FieldValue,
     Map: ?StringHashMap(FieldValue),
     Json: ?StringHashMap(FieldValue),
+
+    pub fn deinit(self: FieldValue, allocator: std.mem.Allocator) void {
+        switch (self) {
+            .String => |str| if (str) |s| allocator.free(s),
+            // todo
+            else => {},
+        }
+    }
 };
 
 pub const Record = []FieldValue;
+
+pub fn deinitRecord(allocator: std.mem.Allocator, record: Record) void {
+    for (record) |value| value.deinit(allocator);
+    allocator.free(record);
+}
+
+test "deinitRecord" {
+    const allocator = std.testing.allocator;
+    var record = try allocator.alloc(FieldValue, 2);
+    record[0] = FieldValue{ .Int = 1 };
+    record[1] = FieldValue{ .String = try allocator.dupe(u8, "hello") };
+    deinitRecord(allocator, record);
+}
 
 pub fn RecordAsMap(allocator: std.mem.Allocator, names: []const []const u8, record: Record) StringHashMap(FieldValue) {
     var map = StringHashMap(FieldValue).init(allocator);
