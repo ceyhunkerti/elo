@@ -17,8 +17,8 @@ scale: ?u32 = null,
 default: ?[]const u8 = null,
 
 pub fn deinit(self: *Self) void {
-    _ = self;
-    // todo
+    self.allocator.free(self.name);
+    if (self.default) |d| self.allocator.free(d);
 }
 
 pub fn fromStatement(allocator: Allocator, index: u32, stmt: *Statement) !Self {

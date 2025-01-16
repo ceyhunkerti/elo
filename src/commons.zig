@@ -19,11 +19,16 @@ pub const FieldType = enum {
     Json,
 };
 
+pub const Metadata = struct {
+    name: []const u8,
+    fields: []const Field,
+};
+
 pub const Field = struct {
     index: usize,
     name: ?[]const u8 = null,
     type: ?FieldType = null,
-    default: ?FieldValue = null,
+    default: ?Value = null,
     description: ?[]const u8 = null,
     nullable: bool = true,
     length: ?u32 = null,
@@ -31,50 +36,104 @@ pub const Field = struct {
     scale: ?u8 = null,
 };
 
-pub const Metadata = struct {
-    name: []const u8,
-    fields: []const Field,
-};
-
-pub const FieldValue = union(FieldType) {
+pub const Value = union(FieldType) {
     String: ?[]u8,
     Int: ?i64,
     Double: ?f64,
     TimeStamp: ?zdt.Datetime,
     Number: ?f64,
     Boolean: ?bool,
-    Array: ?[]FieldValue,
-    Map: ?StringHashMap(FieldValue),
-    Json: ?StringHashMap(FieldValue),
+    Array: ?[]Value,
+    Map: ?ValueMap,
+    Json: ?ValueMap,
 
-    pub fn deinit(self: FieldValue, allocator: std.mem.Allocator) void {
+    pub fn deinit(self: Value, allocator: std.mem.Allocator) void {
         switch (self) {
             .String => |str| if (str) |s| allocator.free(s),
+            // todo
+            // .Map => |map| if (map) |m| m.deinit(),
+            // .Json => |json| if (json) |j| j.deinit(allocator),
+            .Array => |arr| if (arr) |a| {
+                for (a) |item| item.deinit(allocator);
+                allocator.free(a);
+            },
             // todo
             else => {},
         }
     }
 };
 
-pub const Record = []FieldValue;
+pub const ValueMap = struct {
+    map: std.StringHashMap(Value),
 
-pub fn deinitRecord(allocator: std.mem.Allocator, record: Record) void {
-    for (record) |value| value.deinit(allocator);
-    allocator.free(record);
-}
-
-test "deinitRecord" {
-    const allocator = std.testing.allocator;
-    var record = try allocator.alloc(FieldValue, 2);
-    record[0] = FieldValue{ .Int = 1 };
-    record[1] = FieldValue{ .String = try allocator.dupe(u8, "hello") };
-    deinitRecord(allocator, record);
-}
-
-pub fn RecordAsMap(allocator: std.mem.Allocator, names: []const []const u8, record: Record) StringHashMap(FieldValue) {
-    var map = StringHashMap(FieldValue).init(allocator);
-    for (names, record) |name, value| {
-        map.put(name, value) catch unreachable;
+    pub fn init(allocator: std.mem.Allocator) !ValueMap {
+        return .{
+            .map = std.StringHashMap(Value).init(allocator),
+        };
     }
-    return map;
+    pub fn deinit(self: *ValueMap) void {
+        self.map.deinit();
+    }
+
+    pub fn put(self: *ValueMap, name: []const u8, value: Value) !void {
+        try self.map.put(name, value);
+    }
+    pub fn get(self: ValueMap, name: []const u8) ?Value {
+        return self.map.get(name);
+    }
+    pub fn count(self: ValueMap) usize {
+        return self.map.count();
+    }
+};
+
+pub const Record = struct {
+    values: std.ArrayList(Value) = undefined,
+
+    pub fn init(allocator: std.mem.Allocator, size: usize) !Record {
+        return .{
+            .values = try std.ArrayList(Value).initCapacity(allocator, size),
+        };
+    }
+
+    pub fn deinit(self: Record, allocator: std.mem.Allocator) void {
+        for (self.values.items) |item| item.deinit(allocator);
+        self.values.deinit();
+    }
+
+    pub fn len(self: Record) usize {
+        return self.values.items.len;
+    }
+
+    pub fn items(self: Record) []Value {
+        return self.values.items;
+    }
+
+    pub fn add(self: *Record, value: Value) !void {
+        try self.values.append(value);
+    }
+
+    // record still owns the value memory
+    pub fn asMap(self: Record, allocator: std.mem.Allocator, names: []const []const u8) !ValueMap {
+        var map = try ValueMap.init(allocator);
+        for (names, self.values.items) |name, value| {
+            try map.put(name, value);
+        }
+        return map;
+    }
+};
+
+test "Record" {
+    const allocator = std.testing.allocator;
+
+    var record = try Record.init(allocator, 2);
+    defer record.deinit(allocator);
+
+    try record.add(.{ .Int = 1 });
+    try record.add(.{ .String = try allocator.dupe(u8, "test") });
+
+    try std.testing.expectEqual(@as(usize, 2), record.values.items.len);
+
+    var map = try record.asMap(allocator, &[_][]const u8{ "a", "b" });
+    defer map.deinit();
+    try std.testing.expectEqual(@as(usize, 2), map.count());
 }

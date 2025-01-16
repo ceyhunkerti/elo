@@ -1,15 +1,15 @@
 const std = @import("std");
-const Allocator = std.mem.Allocator;
 const c = @import("c.zig").c;
 const Connection = @import("Connection.zig");
 const commons = @import("../../commons.zig");
 const Record = commons.Record;
-const FieldValue = commons.FieldValue;
+const Value = commons.Value;
 
+const t = @import("testing/testing.zig");
 const checkError = @import("./utils.zig").checkError;
 const Self = @This();
 
-allocator: Allocator = undefined,
+allocator: std.mem.Allocator = undefined,
 connection: *Connection = undefined,
 dpi_stmt: ?*c.dpiStmt = null,
 
@@ -24,11 +24,15 @@ pub const BatchInsertPayload = struct {
     dpi_data_array: []?[*c]c.dpiData = undefined,
 };
 
-pub fn init(allocator: Allocator, connection: *Connection) Self {
+pub fn init(allocator: std.mem.Allocator, connection: *Connection) Self {
     return .{
         .allocator = allocator,
         .connection = connection,
     };
+}
+
+pub fn release(self: *Self) void {
+    _ = c.dpiStmt_release(self.dpi_stmt);
 }
 
 pub fn prepare(self: *Self, sql: []const u8) !void {
@@ -36,10 +40,6 @@ pub fn prepare(self: *Self, sql: []const u8) !void {
         c.dpiConn_prepareStmt(self.connection.dpi_conn, 0, sql.ptr, @intCast(sql.len), null, 0, &self.dpi_stmt),
         error.PrepareStatementError,
     );
-}
-
-pub fn release(self: *Self) void {
-    _ = c.dpiStmt_release(self.dpi_stmt);
 }
 
 pub fn setFetchSize(self: *Self, fetch_size: u32) !void {
@@ -71,14 +71,14 @@ pub fn fetch(self: *Self, column_count: u32) !?Record {
     if (found == 0) {
         return null;
     }
-    var row: Record = try self.allocator.alloc(FieldValue, column_count);
+    var record = try Record.init(self.allocator, column_count);
 
     for (1..column_count + 1) |i| {
         var data: ?*c.dpiData = undefined;
         if (c.dpiStmt_getQueryValue(self.dpi_stmt, @intCast(i), &native_type_num, &data) < 0) {
             return error.FetchStatementError;
         }
-        var value: FieldValue = undefined;
+        var value: Value = undefined;
         switch (native_type_num) {
             c.DPI_NATIVE_TYPE_BYTES => {
                 value = .{
@@ -114,10 +114,38 @@ pub fn fetch(self: *Self, column_count: u32) !?Record {
                 return error.FetchStatementError;
             },
         }
-        row[i - 1] = value;
+        try record.add(value);
     }
+    return record;
+}
 
-    return row;
+test "Statement.fetch" {
+    const allocator = std.testing.allocator;
+    const sql =
+        \\select
+        \\1 as A, 2 as B, 'hello' as C, to_date('2020-01-01', 'yyyy-mm-dd') as D
+        \\from dual
+    ;
+    var conn = t.getTestConnection(allocator) catch unreachable;
+    try conn.connect();
+
+    var stmt = try conn.prepareStatement(sql);
+    const column_count = try stmt.execute();
+    const record = try stmt.fetch(column_count);
+
+    try std.testing.expect(record != null);
+    if (record) |r| {
+        defer r.deinit(allocator);
+        try std.testing.expectEqual(r.len(), 4);
+        try std.testing.expectEqual(r.items()[0].Double, 1);
+        try std.testing.expectEqual(r.items()[1].Double, 2);
+        try std.testing.expectEqualStrings(r.items()[2].String.?, "hello");
+        try std.testing.expectEqual(r.items()[3].TimeStamp.?.day, 1);
+        try std.testing.expectEqual(r.items()[3].TimeStamp.?.month, 1);
+        try std.testing.expectEqual(r.items()[3].TimeStamp.?.year, 2020);
+    }
+    stmt.release();
+    try conn.deinit();
 }
 
 pub fn executeMany(self: *Self, num_iters: u32) !void {
