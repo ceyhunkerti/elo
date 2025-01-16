@@ -152,109 +152,108 @@ test "TableMetadata.fetch" {
     }
     try conn.deinit();
 
-    // try utils.dropTableIfExists(&conn, schema_dot_table);
+    try utils.dropTableIfExists(&conn, schema_dot_table);
 
-    // try std.testing.expectEqual(table.columns.len, 5);
-    // try std.testing.expectEqualStrings(table.columns[0].name, "ID");
-    // try std.testing.expectEqualStrings(table.columns[1].name, "NAME");
-    // try std.testing.expectEqualStrings(table.columns[2].name, "AGE");
-    // try std.testing.expectEqualStrings(table.columns[3].name, "BIRTH_DATE");
-    // try std.testing.expectEqualStrings(table.columns[4].name, "IS_ACTIVE");
+    try std.testing.expectEqual(tmd.columns.len, 5);
+    try std.testing.expectEqualStrings(tmd.columns[0].name, "ID");
+    try std.testing.expectEqualStrings(tmd.columns[1].name, "NAME");
+    try std.testing.expectEqualStrings(tmd.columns[2].name, "AGE");
+    try std.testing.expectEqualStrings(tmd.columns[3].name, "BIRTH_DATE");
+    try std.testing.expectEqualStrings(tmd.columns[4].name, "IS_ACTIVE");
 
-    // try std.testing.expectEqual(table.columns[0].oracle_type_num, c.DPI_ORACLE_TYPE_NUMBER);
-    // try std.testing.expectEqual(table.columns[0].native_type_num, c.DPI_NATIVE_TYPE_DOUBLE);
-    // try std.testing.expectEqual(table.columns[0].length, 22);
-    // try std.testing.expectEqual(table.columns[0].precision, 10);
-    // try std.testing.expectEqual(table.columns[0].scale, 0);
-    // try std.testing.expectEqual(table.columns[0].nullable, false);
+    try std.testing.expectEqual(tmd.columns[0].oracle_type_num, c.DPI_ORACLE_TYPE_NUMBER);
+    try std.testing.expectEqual(tmd.columns[0].native_type_num, c.DPI_NATIVE_TYPE_DOUBLE);
+    try std.testing.expectEqual(tmd.columns[0].length, 22);
+    try std.testing.expectEqual(tmd.columns[0].precision, 10);
+    try std.testing.expectEqual(tmd.columns[0].scale, 0);
+    try std.testing.expectEqual(tmd.columns[0].nullable, false);
 }
 
-// pub fn insertQuery(self: Self, columns: ?[]const []const u8) ![]const u8 {
-//     var column_names = std.ArrayList(Column).init(self.allocator);
-//     defer self.allocator.destroy(column_names);
+pub fn insertQuery(self: Self, columns: ?[]const []const u8) ![]const u8 {
+    var column_names = std.ArrayList([]const u8).init(self.allocator);
+    defer column_names.deinit();
 
-//     var bindings = std.ArrayList([]const u8).init(self.allocator);
-//     defer {
-//         for (bindings.items) |b| {
-//             self.allocator.free(b);
-//         }
-//         bindings.deinit();
-//     }
+    var bindings = std.ArrayList([]const u8).init(self.allocator);
+    defer {
+        for (bindings.items) |b| {
+            self.allocator.free(b);
+        }
+        bindings.deinit();
+    }
 
-//     var i: usize = 0;
-//     if (columns) |cols| {
-//         for (cols) |name| {
-//             for (self.columns) |column| {
-//                 if (std.mem.eql(u8, column.name, name)) {
-//                     i += 1;
-//                     const b = try std.fmt.allocPrint(self.allocator, ":{d}", .{i});
-//                     try bindings.append(b);
-//                     try column_names.append(name);
-//                     break;
-//                 }
-//             }
-//         }
-//     } else {
-//         for (self.columns) |column| {
-//             i += 1;
-//             const b = try std.fmt.allocPrint(self.allocator, ":{d}", .{i});
-//             try bindings.append(b);
-//             try column_names.append(column.name);
-//         }
-//     }
+    var i: usize = 0;
+    if (columns) |cols| {
+        for (cols) |name| {
+            for (self.columns) |column| {
+                if (std.mem.eql(u8, column.name, name)) {
+                    i += 1;
+                    const b = try std.fmt.allocPrint(self.allocator, ":{d}", .{i});
+                    try bindings.append(b);
+                    try column_names.append(name);
+                    break;
+                }
+            }
+        }
+    } else {
+        for (self.columns) |column| {
+            i += 1;
+            const b = try std.fmt.allocPrint(self.allocator, ":{d}", .{i});
+            try bindings.append(b);
+            try column_names.append(column.name);
+        }
+    }
 
-//     const sql = try std.fmt.allocPrint(self.allocator,
-//         \\INSERT INTO {s} ({s})
-//         \\VALUES ({s})
-//     , .{
-//         self.table_name,
-//         try column_names.join(self.allocator, ","),
-//         try bindings.join(self.allocator, ","),
-//     });
-//     return sql;
-// }
-// test "TableMetadata.buildInsertQuery" {
-//     // const allocator = std.testing.allocator;
-//     // const schema_dot_table = try std.fmt.allocPrint(allocator, "{s}.TEST_TABLE", .{t.schema()});
-//     // defer allocator.free(schema_dot_table);
-//     // const create_script = try std.fmt.allocPrint(allocator,
-//     //     \\CREATE TABLE {s} (
-//     //     \\  ID NUMBER(10) NOT NULL,
-//     //     \\  NAME VARCHAR2(50) NOT NULL,
-//     //     \\  AGE NUMBER(3) NOT NULL,
-//     //     \\  BIRTH_DATE DATE NOT NULL,
-//     //     \\  IS_ACTIVE NUMBER(1) NOT NULL
-//     //     \\)
-//     // , .{schema_dot_table});
-//     // defer allocator.free(create_script);
+    const columns_expression = try std.mem.join(self.allocator, ",", column_names.items);
+    defer self.allocator.free(columns_expression);
+    const bindings_expression = try std.mem.join(self.allocator, ",", bindings.items);
+    defer self.allocator.free(bindings_expression);
 
-//     // var conn = try t.getTestConnection(allocator);
-//     // try conn.connect();
-//     // // allocator.destroy(conn);
+    const sql = try std.fmt.allocPrint(self.allocator,
+        \\INSERT INTO {s} ({s}) VALUES ({s})
+    , .{
+        self.table.raw_name,
+        columns_expression,
+        bindings_expression,
+    });
+    return sql;
+}
+test "TableMetadata.buildInsertQuery" {
+    const allocator = std.testing.allocator;
+    const schema_dot_table = try std.fmt.allocPrint(allocator, "{s}.TEST_TABLE", .{t.schema()});
 
-//     // // errdefer {
-//     // //     std.debug.print("Error: {s}\n", .{conn.errorMessage()});
-//     // // }
+    const create_script = try std.fmt.allocPrint(allocator,
+        \\CREATE TABLE {s} (
+        \\  ID NUMBER(10) NOT NULL,
+        \\  NAME VARCHAR2(50) NOT NULL,
+        \\  AGE NUMBER(3) NOT NULL,
+        \\  BIRTH_DATE DATE NOT NULL,
+        \\  IS_ACTIVE NUMBER(1) NOT NULL
+        \\)
+    , .{schema_dot_table});
+    defer allocator.free(create_script);
 
-//     // try utils.dropTableIfExists(&conn, schema_dot_table);
-//     // _ = try conn.execute(create_script);
+    var conn = try t.getTestConnection(allocator);
+    try conn.connect();
 
-//     // var table = try Self.fetch(allocator, &conn, schema_dot_table);
-//     // defer table.deinit();
+    errdefer {
+        std.debug.print("Error: {s}\n", .{conn.errorMessage()});
+    }
 
-//     // try utils.dropTableIfExists(&conn, schema_dot_table);
+    try utils.dropTableIfExists(&conn, schema_dot_table);
+    _ = try conn.execute(create_script);
 
-//     // try std.testing.expectEqual(table.columns.len, 5);
-//     // try std.testing.expectEqualStrings(table.columns[0].name, "ID");
-//     // try std.testing.expectEqualStrings(table.columns[1].name, "NAME");
-//     // try std.testing.expectEqualStrings(table.columns[2].name, "AGE");
-//     // try std.testing.expectEqualStrings(table.columns[3].name, "BIRTH_DATE");
-//     // try std.testing.expectEqualStrings(table.columns[4].name, "IS_ACTIVE");
+    var tmd = try Self.fetch(allocator, &conn, schema_dot_table);
+    defer {
+        tmd.deinit();
+    }
 
-//     // try std.testing.expectEqual(table.columns[0].oracle_type_num, c.DPI_ORACLE_TYPE_NUMBER);
-//     // try std.testing.expectEqual(table.columns[0].native_type_num, c.DPI_NATIVE_TYPE_DOUBLE);
-//     // try std.testing.expectEqual(table.columns[0].length, 22);
-//     // try std.testing.expectEqual(table.columns[0].precision, 10);
-//     // try std.testing.expectEqual(table.columns[0].scale, 0);
-//     // try std.testing.expectEqual(table.columns[0].nullable, false);
-// }
+    const insert_query = try tmd.insertQuery(null);
+    defer allocator.free(insert_query);
+
+    try std.testing.expectEqualStrings(
+        insert_query,
+        "INSERT INTO sys.TEST_TABLE (ID,NAME,AGE,BIRTH_DATE,IS_ACTIVE) VALUES (:1,:2,:3,:4,:5)",
+    );
+
+    try conn.deinit();
+}
