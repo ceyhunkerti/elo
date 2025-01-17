@@ -6,6 +6,7 @@ const queue = @import("../../../queue.zig");
 const TableMetadata = @import("../metadata/TableMetadata.zig");
 const CreateTableScript = @import("../metadata/script.zig").CreateTableScript;
 const commons = @import("../../../commons.zig");
+const Record = commons.Record;
 const t = @import("../testing/testing.zig");
 
 const utils = @import("../utils.zig");
@@ -137,17 +138,64 @@ test "Writer.[prepare, resetDpiVariables]" {
 }
 
 // pub fn write(self: *Self, q: *queue.MessageQueue) !void {
+//     var batch = try Batch.init(self.allocator, self.options.batch_size);
+//     defer batch.deinit();
+
 //     break_while: while (true) {
-//         const node = q.get() orelse break;
+//         const node = q.get();
 //         switch (node.data) {
 //             // we are not interested in metadata here
 //             .Metadata => {},
 //             .Record => |record| {
-//                 _ = record;
+//                 if (batch.index < batch.capacity) {
+//                     batch.append(record);
+//                 }
+//                 if (batch.index == batch.capacity) {
+//                     try self.writeBatch();
+//                     batch.reset();
+//                 }
 //             },
 //             .Nil => break :break_while,
 //         }
 //     }
-// }
 
-// pub inline fn addToBatch(self: *Self, record: Record) !void {}
+//     if (batch.index > 0) {
+//         try self.writeBatch();
+//         batch.reset();
+//     }
+// }
+pub inline fn writeBatch(self: *Self) !void {
+    _ = self;
+}
+
+// test "Writer.write" {
+//     const allocator = std.testing.allocator;
+
+//     const tp = try t.getTestConnectionParams();
+//     const options = SinkOptions{
+//         .connection = .{
+//             .connection_string = tp.connection_string,
+//             .username = tp.username,
+//             .password = tp.password,
+//             .privilege = tp.privilege,
+//         },
+//         .table = "TEST_TABLE",
+//         .mode = .Truncate,
+//     };
+//     var writer = Self.init(allocator, options);
+//     try writer.connect();
+//     try writer.prepare();
+
+//     var q = queue.MessageQueue.init();
+//     const record = Record.fromSlice(allocator, &[_]commons.Value{ .{ .Int = 1 }, .{ .Boolean = true } }) catch unreachable;
+//     const message = queue.Message{ .Record = record };
+//     var node = queue.MessageQueue.Node{ .data = message };
+//     q.put(&node);
+//     var term = queue.MessageQueue.Node{ .data = .Nil };
+//     q.put(&term);
+
+//     // try writer.write(&q);
+
+//     try t.dropTestTableIfExist(writer.conn, null);
+//     try writer.deinit();
+// }

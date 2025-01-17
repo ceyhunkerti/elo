@@ -148,3 +148,84 @@ test "MessageQueue sync" {
 
     try testing.expectEqual(1, n.data.Record.item(0).Int);
 }
+
+pub const Mailbox = struct {
+    allocator: std.mem.Allocator,
+    data_capacity: u32 = 0,
+    data_index: u32 = 0,
+    databox: []*MessageQueue.Node = undefined,
+    metadatabox: std.ArrayList(*MessageQueue.Node) = undefined,
+    nilbox: std.ArrayList(*MessageQueue.Node) = undefined,
+
+    pub fn init(allocator: std.mem.Allocator, capacity: u32) !Mailbox {
+        return .{
+            .allocator = allocator,
+            .data_capacity = capacity,
+            .databox = try allocator.alloc(*MessageQueue.Node, capacity),
+            .metadatabox = std.ArrayList(*MessageQueue.Node).init(allocator),
+            .nilbox = std.ArrayList(*MessageQueue.Node).init(allocator),
+        };
+    }
+
+    pub fn deinit(self: *Mailbox) void {
+        self.resetDatabox();
+        self.allocator.free(self.databox);
+
+        for (self.metadatabox.items) |node| {
+            defer self.allocator.destroy(node);
+            node.data.deinit(self.allocator);
+        }
+        for (self.nilbox.items) |node| {
+            defer self.allocator.destroy(node);
+        }
+    }
+
+    pub fn resetDatabox(self: *Mailbox) void {
+        self.data_index = 0;
+        for (self.databox) |node| {
+            defer self.allocator.destroy(node);
+            node.data.deinit(self.allocator);
+        }
+    }
+
+    pub fn appendData(self: *Mailbox, node: *MessageQueue.Node) void {
+        self.databox[self.data_index] = node;
+        self.data_index += 1;
+    }
+
+    pub fn isDataboxFull(self: *Mailbox) bool {
+        return self.data_index == self.data_capacity;
+    }
+
+    pub fn appendMetadata(self: *Mailbox, node: *MessageQueue.Node) void {
+        self.metadatabox.append(node) catch unreachable;
+    }
+
+    pub fn appendNil(self: *Mailbox, node: *MessageQueue.Node) void {
+        self.nilbox.append(node) catch unreachable;
+    }
+};
+
+test "Mailbox" {
+    const allocator = testing.allocator;
+
+    var mailbox = try Mailbox.init(allocator, 2);
+    defer mailbox.deinit();
+
+    const node1 = try allocator.create(MessageQueue.Node);
+    const message1 = Message{ .Record = try Record.fromSlice(allocator, &[_]Value{ .{ .Int = 1 }, .{ .Boolean = true } }) };
+    node1.* = .{ .data = message1 };
+    mailbox.appendData(node1);
+
+    const node2 = try allocator.create(MessageQueue.Node);
+    const message2 = Message{ .Record = try Record.fromSlice(allocator, &[_]Value{ .{ .Int = 2 }, .{ .Boolean = false } }) };
+    node2.* = .{ .data = message2 };
+    mailbox.appendData(node2);
+
+    try testing.expectEqual(mailbox.data_index, 2);
+    try testing.expect(mailbox.databox[0] == node1);
+    try testing.expect(mailbox.databox[1] == node2);
+    try testing.expect(mailbox.databox.len == 2);
+
+    try testing.expect(mailbox.isDataboxFull());
+}

@@ -3,3 +3,5 @@
 .env
 deps
 zig-out
+
+.uncommitted
