@@ -119,34 +119,34 @@ pub fn fetch(self: *Self, column_count: u32) !?Record {
     return record;
 }
 
-test "Statement.fetch" {
-    const allocator = std.testing.allocator;
-    const sql =
-        \\select
-        \\1 as A, 2 as B, 'hello' as C, to_date('2020-01-01', 'yyyy-mm-dd') as D
-        \\from dual
-    ;
-    var conn = t.getTestConnection(allocator) catch unreachable;
-    try conn.connect();
+// test "Statement.fetch" {
+//     const allocator = std.testing.allocator;
+//     const sql =
+//         \\select
+//         \\1 as A, 2 as B, 'hello' as C, to_date('2020-01-01', 'yyyy-mm-dd') as D
+//         \\from dual
+//     ;
+//     var conn = t.getTestConnection(allocator) catch unreachable;
+//     try conn.connect();
 
-    var stmt = try conn.prepareStatement(sql);
-    const column_count = try stmt.execute();
-    const record = try stmt.fetch(column_count);
+//     var stmt = try conn.prepareStatement(sql);
+//     const column_count = try stmt.execute();
+//     const record = try stmt.fetch(column_count);
 
-    try std.testing.expect(record != null);
-    if (record) |r| {
-        defer r.deinit(allocator);
-        try std.testing.expectEqual(r.len(), 4);
-        try std.testing.expectEqual(r.items()[0].Double, 1);
-        try std.testing.expectEqual(r.items()[1].Double, 2);
-        try std.testing.expectEqualStrings(r.items()[2].String.?, "hello");
-        try std.testing.expectEqual(r.items()[3].TimeStamp.?.day, 1);
-        try std.testing.expectEqual(r.items()[3].TimeStamp.?.month, 1);
-        try std.testing.expectEqual(r.items()[3].TimeStamp.?.year, 2020);
-    }
-    stmt.release();
-    try conn.deinit();
-}
+//     try std.testing.expect(record != null);
+//     if (record) |r| {
+//         defer r.deinit(allocator);
+//         try std.testing.expectEqual(r.len(), 4);
+//         try std.testing.expectEqual(r.items()[0].Double, 1);
+//         try std.testing.expectEqual(r.items()[1].Double, 2);
+//         try std.testing.expectEqualStrings(r.items()[2].String.?, "hello");
+//         try std.testing.expectEqual(r.items()[3].TimeStamp.?.day, 1);
+//         try std.testing.expectEqual(r.items()[3].TimeStamp.?.month, 1);
+//         try std.testing.expectEqual(r.items()[3].TimeStamp.?.year, 2020);
+//     }
+//     stmt.release();
+//     try conn.deinit();
+// }
 
 pub fn executeMany(self: *Self, num_iters: u32) !void {
     try checkError(

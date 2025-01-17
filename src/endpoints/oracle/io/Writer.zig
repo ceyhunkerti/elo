@@ -24,7 +24,7 @@ dpi_variables: struct {
     dpi_data_array: ?[]?[*c]c.dpiData = null,
 } = .{},
 
-stmt: *Statement = null,
+stmt: Statement = undefined,
 
 const Error = error{
     FailedToClearDpiVariables,
@@ -80,20 +80,21 @@ pub fn clearDpiVariables(self: *Self) !void {
 }
 
 pub fn resetDpiVariables(self: *Self, array_size: u32) !void {
-    self.dpi_variables.dpi_var_array = try self.allocator.alloc(?*c.dpiVar, self.table_metadata.columns.len);
-    self.dpi_variables.dpi_data_array = try self.allocator.alloc(?[*c]c.dpiData, self.options.batch_size);
+    self.dpi_variables.dpi_var_array = try self.allocator.alloc(?*c.dpiVar, self.table_metadata.columnCount());
+    self.dpi_variables.dpi_data_array = try self.allocator.alloc(?[*c]c.dpiData, self.table_metadata.columnCount());
 
-    for (self.table_metadata.columns, 0..) |column, i| {
+    for (self.table_metadata.columns.?, 0..) |column, ci| {
+        std.debug.print("column: {s} ci {d}\n", .{ column.name, ci });
         try self.conn.newVariable(
-            c.DPI_ORACLE_TYPE_NUMBER,
-            c.DPI_NATIVE_TYPE_INT64,
+            column.oracle_type_num,
+            column.native_type_num,
             array_size,
             column.dpiVarSize(),
             false, // todo size_is_bytes
             false, // todo is_array
             null,
-            &self.dpi_variables.dpi_var_array.?[i],
-            &self.dpi_variables.dpi_data_array.?[i].?,
+            &self.dpi_variables.dpi_var_array.?[ci],
+            &self.dpi_variables.dpi_data_array.?[ci].?,
         );
     }
 }
@@ -114,7 +115,10 @@ pub fn prepare(self: *Self) !void {
     if (self.options.sql) |sql| {
         self.stmt = try self.conn.prepareStatement(sql);
     } else {
-        const sql = try self.table_metadata.insertQuery(self.options.columns);
+        const col_names = self.options.columnNames();
+        defer if (col_names) |names| self.allocator.free(names);
+
+        const sql = try self.table_metadata.insertQuery(col_names);
         defer self.allocator.free(sql);
         self.stmt = try self.conn.prepareStatement(sql);
     }
@@ -183,10 +187,11 @@ pub fn writeBatch(self: *Self, mailbox: *queue.Mailbox) !void {
 
     for (0..mailbox.data_index) |ri| {
         const record = mailbox.databox[ri].*.data.Record;
-        for (record.items, 0..) |column, ci| {
+        for (record.items(), 0..) |column, ci| {
             switch (column) {
                 .Int => |val| {
                     if (val) |v| {
+                        std.debug.print("\nri: {d} ci: {d}\n", .{ ri, ci });
                         dpi_data_array[ri].?[ci].isNull = 0;
                         dpi_data_array[ri].?[ci].value.asInt64 = v;
                     } else {
@@ -203,7 +208,7 @@ pub fn writeBatch(self: *Self, mailbox: *queue.Mailbox) !void {
                 },
                 .String => |val| {
                     if (val) |v| {
-                        if (c.dpiVar_setFromBytes(dpi_var_array[ci].?, ri, v.ptr, v.len) < 0) {
+                        if (c.dpiVar_setFromBytes(dpi_var_array[ci].?, @intCast(ri), v.ptr, @intCast(v.len)) < 0) {
                             std.debug.print("Failed to setFromBytes with error: {s}\n", .{self.conn.errorMessage()});
                             unreachable;
                         } else {
@@ -211,12 +216,37 @@ pub fn writeBatch(self: *Self, mailbox: *queue.Mailbox) !void {
                         }
                     }
                 },
+                .Boolean => |val| {
+                    if (val) |v| {
+                        dpi_data_array[ri].?[ci].isNull = 0;
+                        dpi_data_array[ri].?[ci].value.asBoolean = if (v) 1 else 0;
+                    } else {
+                        dpi_data_array[ri].?[ci].isNull = 1;
+                    }
+                },
+                .TimeStamp => |val| {
+                    _ = val;
+                    // if (val) |v| {
+                    //     dpi_data_array[ri].?[ci].isNull = 0;
+                    //     dpi_data_array[ri].?[ci].value.asTimestamp.date.year = v.year;
+                    //     dpi_data_array[ri].?[ci].value.asTimestamp.date.month = v.month;
+                    //     dpi_data_array[ri].?[ci].value.asTimestamp.date.day = v.day;
+                    //     dpi_data_array[ri].?[ci].value.asTimestamp.time.hour = v.hour;
+                    //     dpi_data_array[ri].?[ci].value.asTimestamp.time.minute = v.minute;
+                    //     dpi_data_array[ri].?[ci].value.asTimestamp.time.second = v.second;
+                    // } else {
+                    //     dpi_data_array[ri].?[ci].isNull = 1;
+                    // }
+                },
                 // todo
                 else => unreachable,
             }
         }
     }
-    try self.stmt.executeMany(mailbox.data_index);
+    self.stmt.executeMany(mailbox.data_index) catch {
+        std.debug.print("Failed to executeMany with error: {s}\n", .{self.conn.errorMessage()});
+        unreachable;
+    };
 }
 
 test "Writer.write" {
@@ -230,13 +260,18 @@ test "Writer.write" {
             .password = tp.password,
             .privilege = tp.privilege,
         },
-        .table = "TEST_TABLE",
+        .table = "SYS.TEST_TABLE",
         .mode = .Truncate,
         .batch_size = 2,
     };
     var writer = Self.init(allocator, options);
     try writer.connect();
+
+    try t.createTestTableIfNotExists(allocator, writer.conn, null);
+
     try writer.prepare();
+
+    try std.testing.expectEqual(5, writer.table_metadata.columnCount());
 
     var q = queue.MessageQueue.init();
     const record1 = Record.fromSlice(allocator, &[_]commons.Value{ .{ .Int = 1 }, .{ .Boolean = true } }) catch unreachable;
@@ -256,7 +291,11 @@ test "Writer.write" {
     q.put(term);
 
     try writer.write(&q);
+    errdefer {
+        std.debug.print("Error in writer.write with error: {s}\n", .{writer.conn.errorMessage()});
+    }
 
-    try t.dropTestTableIfExist(writer.conn, null);
     try writer.deinit();
+
+    // try t.dropTestTableIfExist(writer.conn, null);
 }

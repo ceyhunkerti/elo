@@ -36,6 +36,17 @@ pub const SinkOptions = struct {
     sql: ?[]const u8 = null,
     mode: enum { Append, Truncate } = .Append,
     batch_size: u32 = 10_000,
+
+    pub fn columnNames(self: SinkOptions) ?[]const []const u8 {
+        if (self.columns) |cols| {
+            var names = std.ArrayList([]const u8).init(self.allocator);
+            for (cols) |col| {
+                names.append(col.name) catch unreachable;
+            }
+            return names.toOwnedSlice() catch unreachable;
+        }
+        return null;
+    }
 };
 
 pub const Options = union(enum) {

@@ -41,18 +41,21 @@ pub const Table = struct {
 
 allocator: Allocator,
 table: Table = undefined,
-columns: []Column = undefined,
+columns: ?[]Column = null,
 
 pub fn deinit(self: Self) void {
     self.allocator.free(self.table.raw_name);
-    for (self.columns) |*column| {
-        column.deinit();
+    if (self.columns) |columns| {
+        for (columns) |*column| {
+            column.deinit();
+        }
+        self.allocator.free(columns);
     }
-    self.allocator.free(self.columns);
 }
 
 pub fn fetch(allocator: Allocator, conn: *Connection, table_name: []const u8) !Self {
     const table = Table.init(table_name);
+
     const sql = try std.fmt.allocPrint(
         allocator,
         \\select
@@ -115,6 +118,7 @@ pub fn fetch(allocator: Allocator, conn: *Connection, table_name: []const u8) !S
             .default = if (default) |d| try allocator.dupe(u8, d) else null,
         });
     }
+
     return .{
         .allocator = allocator,
         .table = table,
@@ -154,19 +158,19 @@ test "TableMetadata.fetch" {
 
     try utils.dropTableIfExists(&conn, schema_dot_table);
 
-    try std.testing.expectEqual(tmd.columns.len, 5);
-    try std.testing.expectEqualStrings(tmd.columns[0].name, "ID");
-    try std.testing.expectEqualStrings(tmd.columns[1].name, "NAME");
-    try std.testing.expectEqualStrings(tmd.columns[2].name, "AGE");
-    try std.testing.expectEqualStrings(tmd.columns[3].name, "BIRTH_DATE");
-    try std.testing.expectEqualStrings(tmd.columns[4].name, "IS_ACTIVE");
+    try std.testing.expectEqual(tmd.columns.?.len, 5);
+    try std.testing.expectEqualStrings(tmd.columns.?[0].name, "ID");
+    try std.testing.expectEqualStrings(tmd.columns.?[1].name, "NAME");
+    try std.testing.expectEqualStrings(tmd.columns.?[2].name, "AGE");
+    try std.testing.expectEqualStrings(tmd.columns.?[3].name, "BIRTH_DATE");
+    try std.testing.expectEqualStrings(tmd.columns.?[4].name, "IS_ACTIVE");
 
-    try std.testing.expectEqual(tmd.columns[0].oracle_type_num, c.DPI_ORACLE_TYPE_NUMBER);
-    try std.testing.expectEqual(tmd.columns[0].native_type_num, c.DPI_NATIVE_TYPE_DOUBLE);
-    try std.testing.expectEqual(tmd.columns[0].length, 22);
-    try std.testing.expectEqual(tmd.columns[0].precision, 10);
-    try std.testing.expectEqual(tmd.columns[0].scale, 0);
-    try std.testing.expectEqual(tmd.columns[0].nullable, false);
+    try std.testing.expectEqual(tmd.columns.?[0].oracle_type_num, c.DPI_ORACLE_TYPE_NUMBER);
+    try std.testing.expectEqual(tmd.columns.?[0].native_type_num, c.DPI_NATIVE_TYPE_DOUBLE);
+    try std.testing.expectEqual(tmd.columns.?[0].length, 22);
+    try std.testing.expectEqual(tmd.columns.?[0].precision, 10);
+    try std.testing.expectEqual(tmd.columns.?[0].scale, 0);
+    try std.testing.expectEqual(tmd.columns.?[0].nullable, false);
 }
 
 pub fn insertQuery(self: Self, columns: ?[]const []const u8) ![]const u8 {
@@ -184,7 +188,7 @@ pub fn insertQuery(self: Self, columns: ?[]const []const u8) ![]const u8 {
     var i: usize = 0;
     if (columns) |cols| {
         for (cols) |name| {
-            for (self.columns) |column| {
+            for (self.columns.?) |column| {
                 if (std.mem.eql(u8, column.name, name)) {
                     i += 1;
                     const b = try std.fmt.allocPrint(self.allocator, ":{d}", .{i});
@@ -195,7 +199,7 @@ pub fn insertQuery(self: Self, columns: ?[]const []const u8) ![]const u8 {
             }
         }
     } else {
-        for (self.columns) |column| {
+        for (self.columns.?) |column| {
             i += 1;
             const b = try std.fmt.allocPrint(self.allocator, ":{d}", .{i});
             try bindings.append(b);
@@ -267,8 +271,6 @@ test "TableMetadata.buildInsertQuery" {
 }
 
 pub fn columnCount(self: Self) usize {
-    if (self.columns != undefined) {
-        return self.columns.len;
-    }
+    if (self.columns) |columns| return columns.len;
     return 0;
 }
