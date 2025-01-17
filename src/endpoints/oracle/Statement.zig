@@ -114,7 +114,7 @@ pub fn fetch(self: *Self, column_count: u32) !?Record {
                 return error.FetchStatementError;
             },
         }
-        try record.add(value);
+        try record.append(value);
     }
     return record;
 }

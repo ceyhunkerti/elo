@@ -16,6 +16,7 @@ allocator: std.mem.Allocator,
 conn: *Connection = undefined,
 options: SinkOptions,
 
+batch_index: u32 = 0,
 table_metadata: TableMetadata = undefined,
 dpi_variables: struct {
     dpi_var_array: ?[]?*c.dpiVar = null,
@@ -135,21 +136,18 @@ test "Writer.[prepare, resetDpiVariables]" {
     try writer.deinit();
 }
 
-// pub fn batchVariables() void {}
+// pub fn write(self: *Self, q: *queue.MessageQueue) !void {
+//     break_while: while (true) {
+//         const node = q.get() orelse break;
+//         switch (node.data) {
+//             // we are not interested in metadata here
+//             .Metadata => {},
+//             .Record => |record| {
+//                 _ = record;
+//             },
+//             .Nil => break :break_while,
+//         }
+//     }
+// }
 
-// // pub fn writeBatch(self: Self, sql: []const u8, records: []const commons.Record) !void {}
-
-// // pub fn write(self: Self, q: *queue.MessageQueue, sql: []const u8) !void {
-
-// //     break_while: while (true) {
-// //         const node = q.get() orelse break;
-// //         switch (node.data) {
-// //             // we are not interested in metadata here
-// //             .Metadata => {},
-// //             .Record => |record| {
-// //                 _ = record;
-// //             },
-// //             .Nil => break :break_while,
-// //         }
-// //     }
-// // }
+// pub inline fn addToBatch(self: *Self, record: Record) !void {}

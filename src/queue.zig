@@ -6,6 +6,7 @@ const testing = std.testing;
 const commons = @import("commons.zig");
 const Record = commons.Record;
 const Metadata = commons.Metadata;
+const Value = commons.Value;
 
 pub fn AtomicBlockingQueue(comptime T: type) type {
     return struct {
@@ -81,51 +82,50 @@ pub const Message = union(enum) {
     Metadata: *const Metadata,
     Record: Record,
     Nil,
+
+    pub fn deinit(self: *Message, allocator: std.mem.Allocator) void {
+        switch (self.*) {
+            .Metadata => |metadata| metadata.deinit(allocator),
+            .Record => |*record| record.deinit(allocator),
+            .Nil => {},
+        }
+    }
 };
 
 pub const MessageQueue = AtomicBlockingQueue(Message);
 
 test "MessageQueue" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
+    const allocator = testing.allocator;
 
     const producer = struct {
-        const FieldValue = @import("commons.zig").FieldValue;
-
-        pub fn producerThread(allocator: Allocator, q: *MessageQueue) !void {
-            var record: Record = try allocator.alloc(FieldValue, 2);
-            record[0] = FieldValue{ .Int = 1 };
-            record[1] = FieldValue{ .Boolean = true };
+        pub fn producerThread(allocator_: Allocator, q: *MessageQueue) !void {
+            var record = Record.init(allocator_, 2) catch unreachable;
+            record.appendSlice(&[_]Value{ .{ .Int = 1 }, .{ .Boolean = true } }) catch unreachable;
             const message = Message{ .Record = record };
-
             const node = allocator.create(MessageQueue.Node) catch unreachable;
-            node.* = .{
-                .prev = undefined,
-                .next = undefined,
-                .data = message,
-            };
+            node.* = .{ .data = message };
             q.put(node);
 
             const term = allocator.create(MessageQueue.Node) catch unreachable;
-            term.* = .{
-                .prev = undefined,
-                .next = undefined,
-                .data = .Nil,
-            };
+            term.* = .{ .data = .Nil };
             q.put(term);
         }
     };
     var queue = MessageQueue.init();
 
-    const allocator = arena.allocator();
     var producer_thread = try std.Thread.spawn(.{ .allocator = allocator }, producer.producerThread, .{ allocator, &queue });
 
     break_while: while (true) {
-        switch (queue.get().data) {
+        const node = queue.get();
+        defer allocator.destroy(node);
+        var message = node.data;
+        defer message.deinit(allocator);
+
+        switch (message) {
             .Metadata => |_| {},
             .Record => |record| {
-                try testing.expectEqual(1, record[0].Int);
-                try testing.expectEqual(true, record[1].Boolean);
+                try testing.expectEqual(1, record.items()[0].Int);
+                try testing.expectEqual(true, record.items()[1].Boolean);
             },
             .Nil => break :break_while,
         }
@@ -135,21 +135,16 @@ test "MessageQueue" {
 }
 
 test "MessageQueue sync" {
-    const FieldValue = @import("commons.zig").FieldValue;
-
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
+    const allocator = testing.allocator;
 
     var queue = MessageQueue.init();
-    const allocator = arena.allocator();
-
-    var record: Record = try allocator.alloc(FieldValue, 2);
-    record[0] = FieldValue{ .Int = 1 };
-    record[1] = FieldValue{ .Boolean = true };
+    const record = Record.fromSlice(allocator, &[_]Value{ .{ .Int = 1 }, .{ .Boolean = true } }) catch unreachable;
     const message = Message{ .Record = record };
     var node = MessageQueue.Node{ .data = message, .next = undefined, .prev = undefined };
     queue.put(&node);
 
     const n = queue.get();
-    try testing.expectEqual(1, n.data.Record[0].Int);
+    defer n.data.deinit(allocator);
+
+    try testing.expectEqual(1, n.data.Record.item(0).Int);
 }

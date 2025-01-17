@@ -2,6 +2,10 @@ const std = @import("std");
 const zdt = @import("zdt");
 const StringHashMap = std.StringHashMap;
 
+const Error = error{
+    RecordFieldCapacityExceeded,
+};
+
 pub const EndpointType = enum {
     Source,
     Sink,
@@ -22,6 +26,12 @@ pub const FieldType = enum {
 pub const Metadata = struct {
     name: []const u8,
     fields: []const Field,
+
+    pub fn deinit(self: Metadata, allocator: std.mem.Allocator) void {
+        allocator.free(self.name);
+        for (self.fields) |field| field.deinit(allocator);
+        allocator.free(self.fields);
+    }
 };
 
 pub const Field = struct {
@@ -34,6 +44,11 @@ pub const Field = struct {
     length: ?u32 = null,
     precision: ?u8 = null,
     scale: ?u8 = null,
+
+    pub fn deinit(self: Field, allocator: std.mem.Allocator) void {
+        if (self.name) |name| allocator.free(name);
+        if (self.description) |description| allocator.free(description);
+    }
 };
 
 pub const Value = union(FieldType) {
@@ -95,8 +110,14 @@ pub const Record = struct {
         };
     }
 
+    pub fn fromSlice(allocator: std.mem.Allocator, values: []const Value) !Record {
+        var record = try Record.init(allocator, values.len);
+        try record.appendSlice(values);
+        return record;
+    }
+
     pub fn deinit(self: Record, allocator: std.mem.Allocator) void {
-        for (self.values.items) |item| item.deinit(allocator);
+        for (self.values.items) |it| it.deinit(allocator);
         self.values.deinit();
     }
 
@@ -108,8 +129,19 @@ pub const Record = struct {
         return self.values.items;
     }
 
-    pub fn add(self: *Record, value: Value) !void {
+    pub fn item(self: Record, index: usize) Value {
+        return self.values.items[index];
+    }
+
+    pub inline fn append(self: *Record, value: Value) !void {
         try self.values.append(value);
+    }
+
+    pub inline fn appendSlice(self: *Record, values: []const Value) !void {
+        if (self.values.items.len + values.len > self.values.capacity) {
+            return error.RecordFieldCapacityExceeded;
+        }
+        try self.values.appendSlice(values);
     }
 
     // record still owns the value memory
@@ -128,8 +160,8 @@ test "Record" {
     var record = try Record.init(allocator, 2);
     defer record.deinit(allocator);
 
-    try record.add(.{ .Int = 1 });
-    try record.add(.{ .String = try allocator.dupe(u8, "test") });
+    try record.append(.{ .Int = 1 });
+    try record.append(.{ .String = try allocator.dupe(u8, "test") });
 
     try std.testing.expectEqual(@as(usize, 2), record.values.items.len);
 
