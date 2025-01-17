@@ -1,6 +1,7 @@
 const c = @import("../c.zig").c;
 const std = @import("std");
 const Connection = @import("../Connection.zig");
+const Statement = @import("../Statement.zig");
 const SinkOptions = @import("../options.zig").SinkOptions;
 const queue = @import("../../../queue.zig");
 const TableMetadata = @import("../metadata/TableMetadata.zig");
@@ -8,7 +9,6 @@ const CreateTableScript = @import("../metadata/script.zig").CreateTableScript;
 const commons = @import("../../../commons.zig");
 const Record = commons.Record;
 const t = @import("../testing/testing.zig");
-
 const utils = @import("../utils.zig");
 
 const Self = @This();
@@ -23,6 +23,8 @@ dpi_variables: struct {
     dpi_var_array: ?[]?*c.dpiVar = null,
     dpi_data_array: ?[]?[*c]c.dpiData = null,
 } = .{},
+
+stmt: *Statement = null,
 
 const Error = error{
     FailedToClearDpiVariables,
@@ -77,7 +79,7 @@ pub fn clearDpiVariables(self: *Self) !void {
     };
 }
 
-pub fn resetDpiVariables(self: *Self) !void {
+pub fn resetDpiVariables(self: *Self, array_size: u32) !void {
     self.dpi_variables.dpi_var_array = try self.allocator.alloc(?*c.dpiVar, self.table_metadata.columns.len);
     self.dpi_variables.dpi_data_array = try self.allocator.alloc(?[*c]c.dpiData, self.options.batch_size);
 
@@ -85,7 +87,7 @@ pub fn resetDpiVariables(self: *Self) !void {
         try self.conn.newVariable(
             c.DPI_ORACLE_TYPE_NUMBER,
             c.DPI_NATIVE_TYPE_INT64,
-            self.options.batch_size,
+            array_size,
             column.dpiVarSize(),
             false, // todo size_is_bytes
             false, // todo is_array
@@ -108,6 +110,14 @@ pub fn prepare(self: *Self) !void {
         self.conn,
         try self.allocator.dupe(u8, self.options.table),
     );
+
+    if (self.options.sql) |sql| {
+        self.stmt = try self.conn.prepareStatement(sql);
+    } else {
+        const sql = try self.table_metadata.insertQuery(self.options.columns);
+        defer self.allocator.free(sql);
+        self.stmt = try self.conn.prepareStatement(sql);
+    }
 }
 test "Writer.[prepare, resetDpiVariables]" {
     const allocator = std.testing.allocator;
@@ -130,72 +140,123 @@ test "Writer.[prepare, resetDpiVariables]" {
 
     try writer.prepare();
 
-    try writer.resetDpiVariables();
+    try writer.resetDpiVariables(writer.options.batch_size);
     try writer.clearDpiVariables();
 
     try t.dropTestTableIfExist(writer.conn, null);
     try writer.deinit();
 }
 
-// pub fn write(self: *Self, q: *queue.MessageQueue) !void {
-//     var batch = try Batch.init(self.allocator, self.options.batch_size);
-//     defer batch.deinit();
+pub fn write(self: *Self, q: *queue.MessageQueue) !void {
+    var mailbox = try queue.Mailbox.init(self.allocator, self.options.batch_size);
+    defer mailbox.deinit();
 
-//     break_while: while (true) {
-//         const node = q.get();
-//         switch (node.data) {
-//             // we are not interested in metadata here
-//             .Metadata => {},
-//             .Record => |record| {
-//                 if (batch.index < batch.capacity) {
-//                     batch.append(record);
-//                 }
-//                 if (batch.index == batch.capacity) {
-//                     try self.writeBatch();
-//                     batch.reset();
-//                 }
-//             },
-//             .Nil => break :break_while,
-//         }
-//     }
-
-//     if (batch.index > 0) {
-//         try self.writeBatch();
-//         batch.reset();
-//     }
-// }
-pub inline fn writeBatch(self: *Self) !void {
-    _ = self;
+    break_while: while (true) {
+        const node = q.get();
+        switch (node.data) {
+            // we are not interested in metadata here
+            .Metadata => mailbox.appendMetadata(node),
+            .Record => {
+                mailbox.appendData(node);
+                if (mailbox.isDataboxFull()) {
+                    try self.writeBatch(&mailbox);
+                    mailbox.resetDatabox();
+                }
+            },
+            .Nil => {
+                mailbox.appendNil(node);
+                break :break_while;
+            },
+        }
+    }
+    if (mailbox.hasData()) {
+        try self.writeBatch(&mailbox);
+        mailbox.resetDatabox();
+    }
 }
 
-// test "Writer.write" {
-//     const allocator = std.testing.allocator;
+pub fn writeBatch(self: *Self, mailbox: *queue.Mailbox) !void {
+    try self.resetDpiVariables(mailbox.data_index);
 
-//     const tp = try t.getTestConnectionParams();
-//     const options = SinkOptions{
-//         .connection = .{
-//             .connection_string = tp.connection_string,
-//             .username = tp.username,
-//             .password = tp.password,
-//             .privilege = tp.privilege,
-//         },
-//         .table = "TEST_TABLE",
-//         .mode = .Truncate,
-//     };
-//     var writer = Self.init(allocator, options);
-//     try writer.connect();
-//     try writer.prepare();
+    const dpi_var_array = self.dpi_variables.dpi_var_array.?;
+    const dpi_data_array = self.dpi_variables.dpi_data_array.?;
 
-//     var q = queue.MessageQueue.init();
-//     const record = Record.fromSlice(allocator, &[_]commons.Value{ .{ .Int = 1 }, .{ .Boolean = true } }) catch unreachable;
-//     const message = queue.Message{ .Record = record };
-//     var node = queue.MessageQueue.Node{ .data = message };
-//     q.put(&node);
-//     var term = queue.MessageQueue.Node{ .data = .Nil };
-//     q.put(&term);
+    for (0..mailbox.data_index) |ri| {
+        const record = mailbox.databox[ri].*.data.Record;
+        for (record.items, 0..) |column, ci| {
+            switch (column) {
+                .Int => |val| {
+                    if (val) |v| {
+                        dpi_data_array[ri].?[ci].isNull = 0;
+                        dpi_data_array[ri].?[ci].value.asInt64 = v;
+                    } else {
+                        dpi_data_array[ri].?[ci].isNull = 1;
+                    }
+                },
+                .Number => |val| {
+                    if (val) |v| {
+                        dpi_data_array[ri].?[ci].isNull = 0;
+                        dpi_data_array[ri].?[ci].value.asDouble = v;
+                    } else {
+                        dpi_data_array[ri].?[ci].isNull = 1;
+                    }
+                },
+                .String => |val| {
+                    if (val) |v| {
+                        if (c.dpiVar_setFromBytes(dpi_var_array[ci].?, ri, v.ptr, v.len) < 0) {
+                            std.debug.print("Failed to setFromBytes with error: {s}\n", .{self.conn.errorMessage()});
+                            unreachable;
+                        } else {
+                            dpi_data_array[ri].?[ci].isNull = 0;
+                        }
+                    }
+                },
+                // todo
+                else => unreachable,
+            }
+        }
+    }
+    try self.stmt.executeMany(mailbox.data_index);
+}
 
-//     // try writer.write(&q);
+test "Writer.write" {
+    const allocator = std.testing.allocator;
 
-//     try t.dropTestTableIfExist(writer.conn, null);
-//     try writer.deinit();
-// }
+    const tp = try t.getTestConnectionParams();
+    const options = SinkOptions{
+        .connection = .{
+            .connection_string = tp.connection_string,
+            .username = tp.username,
+            .password = tp.password,
+            .privilege = tp.privilege,
+        },
+        .table = "TEST_TABLE",
+        .mode = .Truncate,
+        .batch_size = 2,
+    };
+    var writer = Self.init(allocator, options);
+    try writer.connect();
+    try writer.prepare();
+
+    var q = queue.MessageQueue.init();
+    const record1 = Record.fromSlice(allocator, &[_]commons.Value{ .{ .Int = 1 }, .{ .Boolean = true } }) catch unreachable;
+    const message1 = queue.Message{ .Record = record1 };
+    const node1 = try allocator.create(queue.MessageQueue.Node);
+    node1.* = .{ .data = message1 };
+    q.put(node1);
+
+    const record2 = Record.fromSlice(allocator, &[_]commons.Value{ .{ .Int = 2 }, .{ .Boolean = false } }) catch unreachable;
+    const message2 = queue.Message{ .Record = record2 };
+    const node2 = try allocator.create(queue.MessageQueue.Node);
+    node2.* = .{ .data = message2 };
+    q.put(node2);
+
+    const term = try allocator.create(queue.MessageQueue.Node);
+    term.* = .{ .data = .Nil };
+    q.put(term);
+
+    try writer.write(&q);
+
+    try t.dropTestTableIfExist(writer.conn, null);
+    try writer.deinit();
+}

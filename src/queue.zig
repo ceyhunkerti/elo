@@ -168,13 +168,19 @@ pub const Mailbox = struct {
     }
 
     pub fn deinit(self: *Mailbox) void {
-        self.resetDatabox();
+        defer self.metadatabox.deinit();
+        defer self.nilbox.deinit();
+
+        if (self.hasData()) {
+            self.resetDatabox();
+        }
         self.allocator.free(self.databox);
 
         for (self.metadatabox.items) |node| {
             defer self.allocator.destroy(node);
             node.data.deinit(self.allocator);
         }
+
         for (self.nilbox.items) |node| {
             defer self.allocator.destroy(node);
         }
@@ -195,6 +201,10 @@ pub const Mailbox = struct {
 
     pub fn isDataboxFull(self: *Mailbox) bool {
         return self.data_index == self.data_capacity;
+    }
+
+    pub fn hasData(self: *Mailbox) bool {
+        return self.data_index > 0;
     }
 
     pub fn appendMetadata(self: *Mailbox, node: *MessageQueue.Node) void {
@@ -226,6 +236,6 @@ test "Mailbox" {
     try testing.expect(mailbox.databox[0] == node1);
     try testing.expect(mailbox.databox[1] == node2);
     try testing.expect(mailbox.databox.len == 2);
-
+    try testing.expect(mailbox.hasData());
     try testing.expect(mailbox.isDataboxFull());
 }
