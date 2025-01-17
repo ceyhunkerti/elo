@@ -21,6 +21,8 @@ pub const ConnectionError = error{
 
     FailedToCommit,
     FailedToRollback,
+
+    FailedToCreateVariable,
 };
 
 pub const Privilege = enum {
@@ -135,6 +137,10 @@ pub fn connect(self: *Self) !void {
     }
     self.dpi_conn = dpi_conn;
 }
+test "connect" {
+    var conn = try t.getTestConnection(testing.allocator);
+    try conn.connect();
+}
 
 pub fn createStatement(self: *Self) Statement {
     return Statement.init(self.allocator, self);
@@ -157,26 +163,36 @@ pub fn commit(self: *Self) !void {
         return error.FailedToCommit;
     }
 }
-// pub fn rollback(self: *Self) !void {
-//     if (c.dpiConn_rollback(self.dpi_conn) < 0) {
-//         debug.print("Failed to rollback with error: {s}\n", .{self.getErrorMessage()});
-//         return error.FailedToRollback;
-//     }
-// }
-
-// pub fn getErrorMessage(self: *Self) []const u8 {
-//     var err: c.dpiErrorInfo = undefined;
-//     c.dpiContext_getError(self.dpi_context, &err);
-//     return std.mem.span(err.message);
-// }
-
-test "connect" {
-    var conn = try t.getTestConnection(testing.allocator);
-    try conn.connect();
+pub fn rollback(self: *Self) !void {
+    if (c.dpiConn_rollback(self.dpi_conn) < 0) {
+        return error.FailedToRollback;
+    }
 }
 
-// test "create context" {
-//     const allocator = std.testing.allocator;
-//     var connection = Self.init(allocator);
-//     try connection.create_context();
-// }
+pub fn newVariable(
+    self: Self,
+    dpi_oracle_type: c.dpiOracleTypeNum,
+    dpi_native_type: c.dpiNativeTypeNum,
+    max_array_size: u32,
+    size: u32,
+    size_is_bytes: bool,
+    is_array: bool,
+    obj_type: ?*c.dpiObjectType,
+    @"var": [*c]?*c.dpiVar,
+    data: [*c][*c]c.dpiData,
+) !void {
+    if (c.dpiConn_newVar(
+        self.dpi_conn,
+        dpi_oracle_type,
+        dpi_native_type,
+        max_array_size,
+        size,
+        if (size_is_bytes) 1 else 0,
+        if (is_array) 1 else 0,
+        obj_type,
+        @"var",
+        data,
+    ) < 0) {
+        return error.FailedToCreateVariable;
+    }
+}

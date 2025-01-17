@@ -56,3 +56,11 @@ pub fn fromFieldValue(index: u32, value: FieldValue) !Self {
         .native_type_num = native_type_num,
     };
 }
+
+pub fn dpiVarSize(self: Self) u32 {
+    return switch (self.native_type_num) {
+        c.DPI_NATIVE_TYPE_BYTES => self.length,
+        c.DPI_NATIVE_TYPE_INT64 => 0,
+        else => 0,
+    };
+}

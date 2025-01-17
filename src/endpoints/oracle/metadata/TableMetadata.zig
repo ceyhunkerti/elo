@@ -43,7 +43,7 @@ allocator: Allocator,
 table: Table = undefined,
 columns: []Column = undefined,
 
-pub fn deinit(self: *Self) void {
+pub fn deinit(self: Self) void {
     self.allocator.free(self.table.raw_name);
     for (self.columns) |*column| {
         column.deinit();
@@ -255,5 +255,20 @@ test "TableMetadata.buildInsertQuery" {
         "INSERT INTO sys.TEST_TABLE (ID,NAME,AGE,BIRTH_DATE,IS_ACTIVE) VALUES (:1,:2,:3,:4,:5)",
     );
 
+    const insert_query_2 = try tmd.insertQuery(&[_][]const u8{ "ID", "NAME" });
+    defer allocator.free(insert_query_2);
+
+    try std.testing.expectEqualStrings(
+        insert_query_2,
+        "INSERT INTO sys.TEST_TABLE (ID,NAME) VALUES (:1,:2)",
+    );
+
     try conn.deinit();
+}
+
+pub fn columnCount(self: Self) usize {
+    if (self.columns != undefined) {
+        return self.columns.len;
+    }
+    return 0;
 }

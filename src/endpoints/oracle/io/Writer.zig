@@ -1,194 +1,139 @@
-// const std = @import("std");
-// const Connection = @import("../Connection.zig");
-// const SinkOptions = @import("../options.zig").SinkOptions;
-// const queue = @import("../../../queue.zig");
-// const TableMetadata = @import("../metadata/TableMetadata.zig");
-// const CreateTableScript = @import("../metadata/script.zig").CreateTableScript;
-// const commons = @import("../../../commons.zig");
-// const t = @import("../testing/testing.zig");
+const c = @import("../c.zig").c;
+const std = @import("std");
+const Connection = @import("../Connection.zig");
+const SinkOptions = @import("../options.zig").SinkOptions;
+const queue = @import("../../../queue.zig");
+const TableMetadata = @import("../metadata/TableMetadata.zig");
+const CreateTableScript = @import("../metadata/script.zig").CreateTableScript;
+const commons = @import("../../../commons.zig");
+const t = @import("../testing/testing.zig");
 
-// const utils = @import("../utils.zig");
+const utils = @import("../utils.zig");
 
-// const Self = @This();
+const Self = @This();
 
-// allocator: std.mem.Allocator,
-// conn: *Connection = undefined,
-// options: SinkOptions,
+allocator: std.mem.Allocator,
+conn: *Connection = undefined,
+options: SinkOptions,
 
-// pub fn init(allocator: std.mem.Allocator, options: SinkOptions) Self {
-//     return .{
-//         .allocator = allocator,
-//         .options = options,
-//         .conn = utils.initConnection(allocator, options.connection),
-//     };
-// }
+table_metadata: TableMetadata = undefined,
+dpi_variables: struct {
+    dpi_var_array: ?[]?*c.dpiVar = null,
+    dpi_data_array: ?[]?[*c]c.dpiData = null,
+} = .{},
 
-// pub fn deinit(self: Self) !void {
-//     try self.conn.deinit();
-//     self.allocator.destroy(self.conn);
-// }
+const Error = error{
+    FailedToClearDpiVariables,
+};
 
-// pub fn connect(self: Self) !void {
-//     return try self.conn.connect();
-// }
+pub fn init(allocator: std.mem.Allocator, options: SinkOptions) Self {
+    return .{
+        .allocator = allocator,
+        .options = options,
+        .conn = utils.initConnection(allocator, options.connection),
+    };
+}
 
-// pub fn prepareTable(self: Self, q: *queue.MessageQueue) !void {
-//     switch (self.options.mode) {
-//         .Append => return,
-//         .Truncate => try utils.truncateTable(self.conn, self.options.table.?),
-//         .Create => {
-//             if (self.options.create_sql) |create_sql| {
-//                 try utils.executeCreateTable(self.conn, create_sql);
-//                 return;
-//             }
-//             const md = try utils.expectMetadata(q);
-//             try utils.dropTableIfExists(self.conn, self.options.table.?);
-//             try utils.executeCreateTable(
-//                 self.conn,
-//                 try CreateTableScript.fromMetadata(self.allocator, md),
-//             );
-//         },
-//     }
-// }
+pub fn deinit(self: Self) !void {
+    try self.conn.deinit();
+    self.allocator.destroy(self.conn);
+    self.table_metadata.deinit();
 
-// test "Writer.prepareTable" {
-//     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-//     defer arena.deinit();
-//     const allocator = arena.allocator();
+    if (self.dpi_variables.dpi_var_array) |arr| self.allocator.free(arr);
+    if (self.dpi_variables.dpi_data_array) |arr| self.allocator.free(arr);
+}
 
-//     const fields = [2]commons.Field{
-//         .{
-//             .index = 1,
-//             .name = "ID",
-//             .type = commons.FieldType.Number,
-//             .default = null,
-//         },
-//         .{
-//             .index = 2,
-//             .name = "NAME",
-//             .type = commons.FieldType.String,
-//             .default = null,
-//         },
-//     };
-//     const md = commons.Metadata{
-//         .name = "TEST_TABLE",
-//         .fields = &fields,
-//     };
-//     const message = queue.Message{ .Metadata = &md };
-//     var q = queue.MessageQueue.init();
-//     var node = queue.MessageQueue.Node{ .data = message };
-//     q.put(&node);
+pub fn connect(self: Self) !void {
+    return try self.conn.connect();
+}
 
-//     const tp = try t.getTestConnectionParams();
-//     const options = SinkOptions{
-//         .connection = .{
-//             .connection_string = tp.connection_string,
-//             .username = tp.username,
-//             .password = tp.password,
-//             .privilege = tp.privilege,
-//         },
-//         .table = "TEST_TABLE",
-//         .mode = .Create,
-//     };
+test "Writer" {
+    const tp = try t.getTestConnectionParams();
+    const options = SinkOptions{
+        .connection = .{
+            .connection_string = tp.connection_string,
+            .username = tp.username,
+            .password = tp.password,
+            .privilege = tp.privilege,
+        },
+        .table = "TEST_TABLE",
+        .mode = .Truncate,
+    };
+    var writer = Self.init(std.testing.allocator, options);
+    try writer.connect();
+    try writer.deinit();
+}
 
-//     var writer = Self.init(allocator, options);
-//     try writer.connect();
+pub fn clearDpiVariables(self: *Self) !void {
+    if (self.dpi_variables.dpi_var_array) |arr| for (arr) |var_| {
+        if (var_) |v| {
+            if (c.dpiVar_release(v) > 0) {
+                std.debug.print("Failed to release variable with error: {s}\n", .{self.conn.errorMessage()});
+                return error.FailedToClearDpiVariables;
+            }
+        }
+    };
+}
 
-//     try utils.dropTableIfExists(writer.conn, options.table.?);
+pub fn resetDpiVariables(self: *Self) !void {
+    self.dpi_variables.dpi_var_array = try self.allocator.alloc(?*c.dpiVar, self.table_metadata.columns.len);
+    self.dpi_variables.dpi_data_array = try self.allocator.alloc(?[*c]c.dpiData, self.options.batch_size);
 
-//     try writer.prepareTable(&q);
+    for (self.table_metadata.columns, 0..) |column, i| {
+        try self.conn.newVariable(
+            c.DPI_ORACLE_TYPE_NUMBER,
+            c.DPI_NATIVE_TYPE_INT64,
+            self.options.batch_size,
+            column.dpiVarSize(),
+            false, // todo size_is_bytes
+            false, // todo is_array
+            null,
+            &self.dpi_variables.dpi_var_array.?[i],
+            &self.dpi_variables.dpi_data_array.?[i].?,
+        );
+    }
+}
 
-//     const is_table_exist = try utils.isTableExist(writer.conn, options.table.?);
-//     try std.testing.expect(is_table_exist);
-// }
+pub fn prepare(self: *Self) !void {
+    // prepare table
+    switch (self.options.mode) {
+        .Append => return,
+        .Truncate => try utils.truncateTable(self.conn, self.options.table),
+    }
 
-// pub fn buildInsertQuery(self: Self) ![]const u8 {
-//     if (self.options.sql) |sql| {
-//         return sql;
-//     }
-//     const table_name = self.options.table.?;
-//     var tmd = try TableMetadata.init(self.allocator, table_name, self.conn);
-//     defer tmd.deinit();
+    self.table_metadata = try TableMetadata.fetch(
+        self.allocator,
+        self.conn,
+        try self.allocator.dupe(u8, self.options.table),
+    );
+}
+test "Writer.[prepare, resetDpiVariables]" {
+    const allocator = std.testing.allocator;
 
-//     var column_names = try self.allocator.alloc([]const u8, tmd.columns.len);
-//     defer self.allocator.free(column_names);
-//     for (tmd.columns, 0..) |column, i| {
-//         column_names[i] = column.name;
-//     }
+    const tp = try t.getTestConnectionParams();
+    const options = SinkOptions{
+        .connection = .{
+            .connection_string = tp.connection_string,
+            .username = tp.username,
+            .password = tp.password,
+            .privilege = tp.privilege,
+        },
+        .table = "TEST_TABLE",
+        .mode = .Truncate,
+    };
+    var writer = Self.init(allocator, options);
+    try writer.connect();
 
-//     var bindings = std.ArrayList([]const u8).init(self.allocator);
-//     for (0..tmd.columns.len) |i| {
-//         try bindings.append(try std.fmt.allocPrint(self.allocator, ":{d}", .{i + 1}));
-//     }
-//     defer {
-//         for (bindings.items) |b| {
-//             self.allocator.free(b);
-//         }
-//         bindings.deinit();
-//     }
-//     return try std.fmt.allocPrint(self.allocator, "insert into {s} ({s}) values ({s})", .{
-//         table_name,
-//         try std.mem.join(self.allocator, ",", column_names),
-//         try std.mem.join(self.allocator, ",", bindings.items),
-//     });
-// }
+    try t.createTestTableIfNotExists(allocator, writer.conn, null);
 
-// test "Writer.buildInsertQuery" {
-//     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-//     defer arena.deinit();
-//     const allocator = arena.allocator();
+    try writer.prepare();
 
-//     const schema_dot_table = try std.fmt.allocPrint(allocator, "{s}.TEST_TABLE", .{t.schema()});
+    try writer.resetDpiVariables();
+    try writer.clearDpiVariables();
 
-//     const create_script = try std.fmt.allocPrint(allocator,
-//         \\CREATE TABLE {s} (
-//         \\  ID NUMBER(10) NOT NULL,
-//         \\  NAME VARCHAR2(50) NOT NULL,
-//         \\  AGE NUMBER(3) NOT NULL,
-//         \\  BIRTH_DATE DATE NOT NULL,
-//         \\  IS_ACTIVE NUMBER(1) NOT NULL
-//         \\)
-//     , .{schema_dot_table});
-
-//     var conn = try t.getTestConnection(allocator);
-//     try conn.connect();
-
-//     errdefer {
-//         std.debug.print("Error: {s}\n", .{conn.errorMessage()});
-//     }
-
-//     try utils.dropTableIfExists(&conn, schema_dot_table);
-//     _ = try conn.execute(create_script);
-
-//     const tp = try t.getTestConnectionParams();
-//     const options = SinkOptions{
-//         .connection = .{
-//             .connection_string = tp.connection_string,
-//             .username = tp.username,
-//             .password = tp.password,
-//             .privilege = tp.privilege,
-//         },
-//         .table = schema_dot_table,
-//     };
-
-//     var writer = Self.init(allocator, options);
-//     try writer.connect();
-//     errdefer {
-//         std.debug.print("Writer Error: {s}\n", .{writer.conn.errorMessage()});
-//     }
-
-//     const query = try writer.buildInsertQuery();
-//     try std.testing.expectEqualStrings(
-//         query,
-//         try std.fmt.allocPrint(
-//             allocator,
-//             "insert into {s} (ID,NAME,AGE,BIRTH_DATE,IS_ACTIVE) values (:1,:2,:3,:4,:5)",
-//             .{schema_dot_table},
-//         ),
-//     );
-
-//     try utils.dropTableIfExists(&conn, schema_dot_table);
-// }
+    try t.dropTestTableIfExist(writer.conn, null);
+    try writer.deinit();
+}
 
 // pub fn batchVariables() void {}
 

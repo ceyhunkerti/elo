@@ -12,7 +12,7 @@ pub const ConnectionOptions = struct {
 
 pub const SourceOptions = struct {
     connection: ConnectionOptions,
-    fetch_size: u64 = 10_000,
+    fetch_size: u32 = 10_000,
     sql: []const u8,
 
     // pub fn validate() !void {} // TODO
@@ -31,11 +31,11 @@ pub const Column = struct {
 pub const SinkOptions = struct {
     allocator: std.mem.Allocator = undefined,
     connection: ConnectionOptions,
-    table: ?[]const u8,
+    table: []const u8,
     columns: ?[]const Column = null,
     sql: ?[]const u8 = null,
     mode: enum { Append, Truncate } = .Append,
-    batch_size: u64 = 10_000,
+    batch_size: u32 = 10_000,
 };
 
 pub const Options = union(enum) {
