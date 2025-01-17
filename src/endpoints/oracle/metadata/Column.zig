@@ -36,27 +36,6 @@ pub fn fromStatement(allocator: Allocator, index: u32, stmt: *Statement) !Self {
     };
 }
 
-pub fn fromFieldValue(index: u32, value: FieldValue) !Self {
-    var oracle_type_num: c.dpiOracleTypeNum = undefined;
-    var native_type_num: c.dpiNativeTypeNum = undefined;
-    switch (value) {
-        .Int => {
-            oracle_type_num = c.DPI_ORACLE_TYPE_NUMBER;
-            native_type_num = c.DPI_NATIVE_TYPE_INT64;
-        },
-        .String => {
-            oracle_type_num = c.DPI_ORACLE_TYPE_VARCHAR;
-            native_type_num = c.DPI_NATIVE_TYPE_VARCHAR;
-        },
-        else => unreachable, // TODO
-    }
-    return .{
-        .index = index,
-        .oracle_type_num = oracle_type_num,
-        .native_type_num = native_type_num,
-    };
-}
-
 pub fn dpiVarSize(self: Self) u32 {
     return switch (self.native_type_num) {
         c.DPI_NATIVE_TYPE_BYTES => self.length,

@@ -79,14 +79,14 @@ pub fn AtomicBlockingQueue(comptime T: type) type {
 }
 
 pub const Message = union(enum) {
-    Metadata: *const Metadata,
+    Metadata: Metadata,
     Record: Record,
     Nil,
 
     pub fn deinit(self: *Message, allocator: std.mem.Allocator) void {
         switch (self.*) {
             .Metadata => |metadata| metadata.deinit(allocator),
-            .Record => |*record| record.deinit(allocator),
+            .Record => |record| record.deinit(allocator),
             .Nil => {},
         }
     }
@@ -187,11 +187,14 @@ pub const Mailbox = struct {
     }
 
     pub fn resetDatabox(self: *Mailbox) void {
-        self.data_index = 0;
-        for (self.databox) |node| {
-            defer self.allocator.destroy(node);
-            node.data.deinit(self.allocator);
+        std.debug.print("\ncrearing databox {d}\n", .{self.databox.len});
+
+        for (self.databox, 0..) |node, i| {
+            if (i == self.data_index) break;
+            node.*.data.deinit(self.allocator);
+            self.allocator.destroy(node);
         }
+        self.data_index = 0;
     }
 
     pub fn appendData(self: *Mailbox, node: *MessageQueue.Node) void {

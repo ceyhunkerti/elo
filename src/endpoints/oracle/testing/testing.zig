@@ -29,11 +29,11 @@ pub fn createTestTable(allocator: std.mem.Allocator, conn: *Connection, args: ?s
         } else {
             create_script = try std.fmt.allocPrint(allocator,
                 \\CREATE TABLE {s} (
-                \\  ID NUMBER(10) NOT NULL,
-                \\  NAME VARCHAR2(50) NOT NULL,
-                \\  AGE NUMBER(3) NOT NULL,
-                \\  BIRTH_DATE DATE NOT NULL,
-                \\  IS_ACTIVE NUMBER(1) NOT NULL
+                \\  ID NUMBER(10) not null,
+                \\  NAME VARCHAR2(50) not null,
+                \\  AGE NUMBER(10) not null,
+                \\  BIRTH_DATE DATE not null,
+                \\  IS_ACTIVE NUMBER(1) not null
                 \\)
             , .{schema_dot_table});
             defer allocator.free(create_script);
@@ -44,14 +44,14 @@ pub fn createTestTable(allocator: std.mem.Allocator, conn: *Connection, args: ?s
     }
 
     const schema_dot_table = try std.fmt.allocPrint(allocator, "{s}.TEST_TABLE", .{schema()});
-    allocator.free(schema_dot_table);
+    defer allocator.free(schema_dot_table);
     const create_script = try std.fmt.allocPrint(allocator,
         \\CREATE TABLE {s} (
-        \\  ID NUMBER(10) NOT NULL,
-        \\  NAME VARCHAR2(50) NOT NULL,
-        \\  AGE NUMBER(3) NOT NULL,
-        \\  BIRTH_DATE DATE NOT NULL,
-        \\  IS_ACTIVE NUMBER(1) NOT NULL
+        \\  ID NUMBER(10) not null,
+        \\  NAME VARCHAR2(50) not null,
+        \\  AGE NUMBER(10) not null,
+        \\  BIRTH_DATE DATE not null,
+        \\  IS_ACTIVE NUMBER(1) not null
         \\)
     , .{schema_dot_table});
     defer allocator.free(create_script);

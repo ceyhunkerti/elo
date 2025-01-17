@@ -159,7 +159,7 @@ pub fn execute(self: *Self, sql: []const u8) !u32 {
 
 pub fn commit(self: *Self) !void {
     if (c.dpiConn_commit(self.dpi_conn) < 0) {
-        debug.print("Failed to commit with error: {s}\n", .{self.getErrorMessage()});
+        debug.print("Failed to commit with error: {s}\n", .{self.errorMessage()});
         return error.FailedToCommit;
     }
 }
@@ -178,8 +178,8 @@ pub fn newVariable(
     size_is_bytes: bool,
     is_array: bool,
     obj_type: ?*c.dpiObjectType,
-    @"var": [*c]?*c.dpiVar,
-    data: [*c][*c]c.dpiData,
+    @"var": *[*c]?*c.dpiVar,
+    data: *[*c][*c]c.dpiData,
 ) !void {
     if (c.dpiConn_newVar(
         self.dpi_conn,
@@ -190,8 +190,8 @@ pub fn newVariable(
         if (size_is_bytes) 1 else 0,
         if (is_array) 1 else 0,
         obj_type,
-        @"var",
-        data,
+        @"var".*,
+        data.*,
     ) < 0) {
         return error.FailedToCreateVariable;
     }
