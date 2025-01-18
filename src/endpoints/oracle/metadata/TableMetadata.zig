@@ -39,7 +39,7 @@ pub const Table = struct {
     }
 };
 
-allocator: Allocator,
+allocator: Allocator = undefined,
 table: Table = undefined,
 columns: ?[]Column = null,
 

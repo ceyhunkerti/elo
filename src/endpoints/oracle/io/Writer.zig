@@ -17,9 +17,9 @@ const Self = @This();
 allocator: std.mem.Allocator,
 conn: *Connection = undefined,
 options: SinkOptions,
-
 batch_index: u32 = 0,
-table_metadata: TableMetadata = undefined,
+
+table_metadata: TableMetadata = .{},
 dpi_variables: struct {
     dpi_var_array: ?[]?*c.dpiVar = null,
     dpi_data_array: ?[]?[*c]c.dpiData = null,
@@ -192,6 +192,7 @@ pub fn write(self: *Self, q: *queue.MessageQueue) !void {
                 mailbox.appendData(node);
                 if (mailbox.isDataboxFull()) {
                     try self.writeBatch(&mailbox);
+                    try self.conn.commit();
                     mailbox.resetDatabox();
                 }
             },
@@ -203,9 +204,10 @@ pub fn write(self: *Self, q: *queue.MessageQueue) !void {
     }
     if (mailbox.hasData()) {
         try self.writeBatch(&mailbox);
+        try self.conn.commit();
         mailbox.resetDatabox();
     }
-    try self.conn.commit();
+
     try self.stmt.connection.commit();
 }
 
@@ -281,7 +283,8 @@ pub fn writeBatch(self: *Self, mailbox: *queue.Mailbox) !void {
         std.debug.print("Failed to executeMany with error: {s}\n", .{self.conn.errorMessage()});
         unreachable;
     };
-    try self.stmt.connection.commit();
+
+    try self.conn.commit();
 }
 
 test "batch-insert" {
@@ -295,7 +298,7 @@ test "batch-insert" {
             .password = tp.password,
             .privilege = tp.privilege,
         },
-        .table = "SYS.TEST_TABLE",
+        .table = "SYS.TEST_TABLE_1",
         .mode = .Truncate,
         .batch_size = 2,
     };
@@ -402,15 +405,26 @@ test "Writer.write" {
             .password = tp.password,
             .privilege = tp.privilege,
         },
-        .table = "SYS.TEST_TABLE",
+        .table = "SYS.TEST_TABLE_WRITE_01",
         .mode = .Truncate,
         .batch_size = 2,
     };
     var writer = Self.init(allocator, options);
     try writer.connect();
 
-    try t.dropTestTableIfExist(writer.conn, .{ .schema_dot_table = "SYS.TEST_TABLE" });
-    try t.createTestTableIfNotExists(allocator, writer.conn, null);
+    try t.dropTestTableIfExist(writer.conn, .{ .schema_dot_table = "SYS.TEST_TABLE_WRITE_01" });
+    try t.createTestTableIfNotExists(allocator, writer.conn, .{
+        .schema_dot_table = "SYS.TEST_TABLE_WRITE_01",
+        .create_script =
+        \\CREATE TABLE SYS.TEST_TABLE_WRITE_01 (
+        \\    id NUMBER,
+        \\    name VARCHAR2(10),
+        \\    age NUMBER,
+        \\    birth_date DATE,
+        \\    is_active NUMBER
+        \\)
+        ,
+    });
 
     try writer.prepare();
 
@@ -435,17 +449,17 @@ test "Writer.write" {
     node1.* = .{ .data = message1 };
     q.put(node1);
 
-    // const record2 = Record.fromSlice(allocator, &[_]commons.Value{
-    //     .{ .Int = 2 }, //id
-    //     .{ .String = try allocator.dupe(u8, "Jane") }, //name
-    //     .{ .Int = 21 }, //age
-    //     .{ .TimeStamp = try zdt.Datetime.now(null) }, //birth_date
-    //     .{ .Boolean = false }, //is_active
-    // }) catch unreachable;
-    // const message2 = queue.Message{ .Record = record2 };
-    // const node2 = try allocator.create(queue.MessageQueue.Node);
-    // node2.* = .{ .data = message2 };
-    // q.put(node2);
+    const record2 = Record.fromSlice(allocator, &[_]commons.Value{
+        .{ .Int = 2 }, //id
+        .{ .String = try allocator.dupe(u8, "Jane") }, //name
+        .{ .Int = 21 }, //age
+        .{ .TimeStamp = try zdt.Datetime.now(null) }, //birth_date
+        .{ .Boolean = false }, //is_active
+    }) catch unreachable;
+    const message2 = queue.Message{ .Record = record2 };
+    const node2 = try allocator.create(queue.MessageQueue.Node);
+    node2.* = .{ .data = message2 };
+    q.put(node2);
 
     const term = try allocator.create(queue.MessageQueue.Node);
     term.* = .{ .data = .Nil };
