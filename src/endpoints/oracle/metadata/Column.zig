@@ -11,6 +11,7 @@ name: []const u8 = undefined,
 nullable: bool = true,
 oracle_type_num: c.dpiOracleTypeNum = undefined,
 native_type_num: c.dpiNativeTypeNum = undefined,
+oracle_type_name: ?[]const u8 = null,
 length: u32 = 0,
 precision: ?u32 = null,
 scale: ?u32 = null,
@@ -19,6 +20,23 @@ default: ?[]const u8 = null,
 pub fn deinit(self: *Self) void {
     self.allocator.free(self.name);
     if (self.default) |d| self.allocator.free(d);
+    if (self.oracle_type_name) |otn| self.allocator.free(otn);
+}
+
+pub fn toString(self: Self) ![]const u8 {
+    return try std.fmt.allocPrint(self.allocator,
+        \\Name: {s}
+        \\OracleTypeNme: {s}
+        \\OracleTypeNum: {d}
+        \\NativeTypeNum: {d}
+        \\Nullable: {any}
+    , .{
+        self.name,
+        if (self.oracle_type_name) |otn| otn else "null",
+        self.oracle_type_num,
+        self.native_type_num,
+        self.nullable,
+    });
 }
 
 pub fn fromStatement(allocator: Allocator, index: u32, stmt: *Statement) !Self {

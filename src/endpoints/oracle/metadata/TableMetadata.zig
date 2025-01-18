@@ -112,6 +112,7 @@ pub fn fetch(allocator: Allocator, conn: *Connection, table_name: []const u8) !S
             .nullable = nullable,
             .oracle_type_num = utils.toDpiOracleTypeNum(data_type.?),
             .native_type_num = utils.toDpiNativeTypeNum(data_type.?),
+            .oracle_type_name = if (data_type) |d| try allocator.dupe(u8, d) else null,
             .length = std.math.lossyCast(u32, length.?),
             .precision = if (precision) |p| std.math.lossyCast(u32, p) else null,
             .scale = if (scale) |s| std.math.lossyCast(u32, s) else null,
@@ -171,6 +172,19 @@ test "TableMetadata.fetch" {
     try std.testing.expectEqual(tmd.columns.?[0].precision, 10);
     try std.testing.expectEqual(tmd.columns.?[0].scale, 0);
     try std.testing.expectEqual(tmd.columns.?[0].nullable, false);
+    try std.testing.expectEqualStrings(tmd.columns.?[0].oracle_type_name.?, "NUMBER");
+
+    const col_str = try tmd.columns.?[0].toString();
+    defer allocator.free(col_str);
+    try std.testing.expectEqualStrings(
+        \\Name: ID
+        \\OracleTypeNme: NUMBER
+        \\OracleTypeNum: 2010
+        \\NativeTypeNum: 3003
+        \\Nullable: false
+    ,
+        col_str,
+    );
 }
 
 pub fn insertQuery(self: Self, columns: ?[]const []const u8) ![]const u8 {

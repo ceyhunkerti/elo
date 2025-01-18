@@ -8,6 +8,7 @@ const TableMetadata = @import("../metadata/TableMetadata.zig");
 const CreateTableScript = @import("../metadata/script.zig").CreateTableScript;
 const commons = @import("../../../commons.zig");
 const Record = commons.Record;
+const Value = commons.Value;
 const t = @import("../testing/testing.zig");
 const utils = @import("../utils.zig");
 const zdt = @import("zdt");
@@ -29,6 +30,7 @@ stmt: Statement = undefined,
 
 const Error = error{
     FailedToClearDpiVariables,
+    TypeConversionNotSupported,
 };
 
 pub fn init(allocator: std.mem.Allocator, options: SinkOptions) Self {
@@ -132,7 +134,6 @@ pub fn prepare(self: *Self) !void {
         const sql = try self.table_metadata.insertQuery(col_names);
         defer self.allocator.free(sql);
         self.stmt = try self.conn.prepareStatement(sql);
-        std.debug.print("SQL: {s}\n", .{sql});
     }
     try self.initDpiVariables();
 }
@@ -207,7 +208,29 @@ pub fn writeBatch(self: *Self, mailbox: *queue.Mailbox) !void {
                             c.DPI_NATIVE_TYPE_DOUBLE => {
                                 self.dpi_variables.dpi_data_array.?[ci].?[ri].value.asDouble = @floatFromInt(v);
                             },
-                            else => unreachable, //todo
+                            c.DPI_NATIVE_TYPE_FLOAT => {
+                                self.dpi_variables.dpi_data_array.?[ci].?[ri].value.asFloat = @floatFromInt(v);
+                            },
+                            c.DPI_NATIVE_TYPE_BYTES => {
+                                const str = try std.fmt.allocPrint(self.allocator, "{d}", .{v});
+                                defer self.allocator.free(str);
+                                if (c.dpiVar_setFromBytes(self.dpi_variables.dpi_var_array.?[ci].?, @intCast(ri), str.ptr, @intCast(str.len)) < 0) {
+                                    std.debug.print("Failed to setFromBytes with error: {s}\n", .{self.conn.errorMessage()});
+                                    unreachable;
+                                }
+                            },
+                            else => {
+                                std.debug.print(
+                                    \\Type conversion from int to oracle native type num {d} is not supported
+                                    \\Column name: {s}
+                                    \\Column oracle type num: {d}
+                                , .{
+                                    self.table_metadata.columns.?[ci].native_type_num,
+                                    self.table_metadata.columns.?[ci].name,
+                                    self.table_metadata.columns.?[ci].oracle_type_num,
+                                });
+                                return error.TypeConversionNotSupported;
+                            },
                         }
                         self.dpi_variables.dpi_data_array.?[ci].?[ri].isNull = 0;
                     } else {
@@ -223,7 +246,26 @@ pub fn writeBatch(self: *Self, mailbox: *queue.Mailbox) !void {
                             c.DPI_NATIVE_TYPE_DOUBLE => {
                                 self.dpi_variables.dpi_data_array.?[ci].?[ri].value.asDouble = v;
                             },
-                            else => unreachable, //todo
+                            c.DPI_NATIVE_TYPE_BYTES => {
+                                const str = try std.fmt.allocPrint(self.allocator, "{d}", .{v});
+                                defer self.allocator.free(str);
+                                if (c.dpiVar_setFromBytes(self.dpi_variables.dpi_var_array.?[ci].?, @intCast(ri), str.ptr, @intCast(str.len)) < 0) {
+                                    std.debug.print("Failed to setFromBytes with error: {s}\n", .{self.conn.errorMessage()});
+                                    unreachable;
+                                }
+                            },
+                            else => {
+                                std.debug.print(
+                                    \\Type conversion from int to oracle native type num {d} is not supported
+                                    \\Column name: {s}
+                                    \\Column oracle type num: {d}
+                                , .{
+                                    self.table_metadata.columns.?[ci].native_type_num,
+                                    self.table_metadata.columns.?[ci].name,
+                                    self.table_metadata.columns.?[ci].oracle_type_num,
+                                });
+                                return error.TypeConversionNotSupported;
+                            },
                         }
                         self.dpi_variables.dpi_data_array.?[ci].?[ri].isNull = 0;
                     } else {
@@ -232,6 +274,18 @@ pub fn writeBatch(self: *Self, mailbox: *queue.Mailbox) !void {
                 },
                 .String => |val| {
                     if (val) |v| {
+                        if (self.table_metadata.columns.?[ci].native_type_num != c.DPI_NATIVE_TYPE_BYTES) {
+                            std.debug.print(
+                                \\Type conversion from string to oracle native type num {d} is not supported
+                                \\Column name: {s}
+                                \\Column oracle type num: {d}
+                            , .{
+                                self.table_metadata.columns.?[ci].native_type_num,
+                                self.table_metadata.columns.?[ci].name,
+                                self.table_metadata.columns.?[ci].oracle_type_num,
+                            });
+                            return error.TypeConversionNotSupported;
+                        }
                         if (c.dpiVar_setFromBytes(self.dpi_variables.dpi_var_array.?[ci].?, @intCast(ri), v.ptr, @intCast(v.len)) < 0) {
                             std.debug.print("Failed to setFromBytes with error: {s}\n", .{self.conn.errorMessage()});
                             unreachable;
@@ -394,7 +448,7 @@ test "Writer.write" {
         .create_script =
         \\CREATE TABLE TEST_TABLE_WRITE_01 (
         \\    id NUMBER,
-        \\    name VARCHAR2(10),
+        \\    name VARCHAR2(10 char),
         \\    age NUMBER,
         \\    birth_date DATE,
         \\    is_active NUMBER
@@ -437,6 +491,19 @@ test "Writer.write" {
     node2.* = .{ .data = message2 };
     q.put(node2);
 
+    // third record with unicode
+    const record3 = Record.fromSlice(allocator, &[_]commons.Value{
+        .{ .Int = 3 }, //id
+        .{ .String = try allocator.dupe(u8, "Έ Ή") }, //name
+        .{ .Int = 22 }, //age
+        .{ .TimeStamp = try zdt.Datetime.now(null) }, //birth_date
+        .{ .Boolean = true }, //is_active
+    }) catch unreachable;
+    const message3 = queue.Message{ .Record = record3 };
+    const node3 = try allocator.create(queue.MessageQueue.Node);
+    node3.* = .{ .data = message3 };
+    q.put(node3);
+
     const term = try allocator.create(queue.MessageQueue.Node);
     term.* = .{ .data = .Nil };
     q.put(term);
@@ -467,12 +534,16 @@ test "Writer.write" {
                 try std.testing.expectEqual(2, row.?.item(0).Double.?);
                 try std.testing.expectEqualStrings("Jane", row.?.item(1).String.?);
             },
+            2 => {
+                try std.testing.expectEqual(3, row.?.item(0).Double.?);
+                try std.testing.expectEqualStrings("Έ Ή", row.?.item(1).String.?);
+            },
             else => unreachable,
         }
         record_count += 1;
     }
 
-    try std.testing.expectEqual(2, record_count);
+    try std.testing.expectEqual(3, record_count);
 
     try t.dropTestTableIfExist(writer.conn, .{ .schema_dot_table = schema_dot_table });
 
