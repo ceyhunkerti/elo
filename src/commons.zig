@@ -129,6 +129,10 @@ pub const Record = struct {
         return self.values.items;
     }
 
+    pub fn capacity(self: Record) usize {
+        return self.values.capacity;
+    }
+
     pub fn item(self: Record, index: usize) Value {
         return self.values.items[index];
     }

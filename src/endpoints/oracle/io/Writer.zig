@@ -384,6 +384,9 @@ test "batch-insert" {
 test "Writer.write" {
     const allocator = std.testing.allocator;
 
+    const schema_dot_table = try std.fmt.allocPrint(allocator, "{s}.TEST_TABLE_WRITE_01", .{t.schema()});
+    defer allocator.free(schema_dot_table);
+
     const tp = try t.getTestConnectionParams();
     const options = SinkOptions{
         .connection = .{
@@ -392,18 +395,18 @@ test "Writer.write" {
             .password = tp.password,
             .privilege = tp.privilege,
         },
-        .table = "SYS.TEST_TABLE_WRITE_01",
+        .table = schema_dot_table,
         .mode = .Truncate,
         .batch_size = 2,
     };
     var writer = Self.init(allocator, options);
     try writer.connect();
 
-    try t.dropTestTableIfExist(writer.conn, .{ .schema_dot_table = "SYS.TEST_TABLE_WRITE_01" });
+    try t.dropTestTableIfExist(writer.conn, .{ .schema_dot_table = schema_dot_table });
     try t.createTestTableIfNotExists(allocator, writer.conn, .{
-        .schema_dot_table = "SYS.TEST_TABLE_WRITE_01",
+        .schema_dot_table = schema_dot_table,
         .create_script =
-        \\CREATE TABLE SYS.TEST_TABLE_WRITE_01 (
+        \\CREATE TABLE TEST_TABLE_WRITE_01 (
         \\    id NUMBER,
         \\    name VARCHAR2(10),
         \\    age NUMBER,
@@ -419,8 +422,7 @@ test "Writer.write" {
 
     var q = queue.MessageQueue.init();
 
-    // Id, name, age, birt_date, is_active
-
+    // first record
     const record1 = Record.fromSlice(
         allocator,
         &[_]commons.Value{
@@ -436,6 +438,7 @@ test "Writer.write" {
     node1.* = .{ .data = message1 };
     q.put(node1);
 
+    // second record
     const record2 = Record.fromSlice(allocator, &[_]commons.Value{
         .{ .Int = 2 }, //id
         .{ .String = try allocator.dupe(u8, "Jane") }, //name
@@ -457,8 +460,35 @@ test "Writer.write" {
         std.debug.print("Error in writer.write with error: {s}\n", .{writer.conn.errorMessage()});
     }
 
-    try writer.stmt.connection.commit();
-    try writer.deinit();
+    const check_query = "SELECT id, name, age, birth_date, is_active FROM TEST_TABLE_WRITE_01 order by id";
+    var stmt = writer.conn.prepareStatement(check_query) catch unreachable;
+    const column_count = try stmt.execute();
+    var record_count: usize = 0;
+    while (true) {
+        const row = stmt.fetch(column_count) catch {
+            std.debug.print("Error in writer.write with error: {s}\n", .{writer.conn.errorMessage()});
+            unreachable;
+        };
+        if (row == null) break;
+        defer row.?.deinit(allocator);
 
-    // try t.dropTestTableIfExist(writer.conn, null);
+        switch (record_count) {
+            0 => {
+                try std.testing.expectEqual(1, row.?.item(0).Double.?);
+                try std.testing.expectEqualStrings("John", row.?.item(1).String.?);
+            },
+            1 => {
+                try std.testing.expectEqual(2, row.?.item(0).Double.?);
+                try std.testing.expectEqualStrings("Jane", row.?.item(1).String.?);
+            },
+            else => unreachable,
+        }
+        record_count += 1;
+    }
+
+    try std.testing.expectEqual(2, record_count);
+
+    try t.dropTestTableIfExist(writer.conn, .{ .schema_dot_table = schema_dot_table });
+
+    try writer.deinit();
 }
