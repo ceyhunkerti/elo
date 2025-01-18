@@ -86,34 +86,17 @@ pub fn initDpiVariables(self: *Self) !void {
     self.dpi_variables.dpi_data_array = try self.allocator.alloc(?[*c]c.dpiData, self.table_metadata.columnCount());
 
     for (self.table_metadata.columns.?, 0..) |column, ci| {
-        std.debug.print("oracle {d} native {d}\n", .{ column.oracle_type_num, column.native_type_num });
-
-        if (c.dpiConn_newVar(
-            self.stmt.connection.dpi_conn,
+        try self.conn.newVariable(
             column.oracle_type_num,
             column.native_type_num,
             self.options.batch_size,
             column.dpiVarSize(),
-            0,
-            0,
+            false, // todo size_is_bytes
+            false, // todo is_array
             null,
             &self.dpi_variables.dpi_var_array.?[ci],
             &self.dpi_variables.dpi_data_array.?[ci].?,
-        ) < 0) {
-            return error.FailedToCreateVariable;
-        }
-
-        // try self.conn.newVariable(
-        //     column.oracle_type_num,
-        //     column.native_type_num,
-        //     self.options.batch_size,
-        //     column.dpiVarSize(),
-        //     false, // todo size_is_bytes
-        //     false, // todo is_array
-        //     null,
-        //     &self.dpi_variables.dpi_var_array.?[ci],
-        //     &self.dpi_variables.dpi_data_array.?[ci].?,
-        // );
+        );
     }
 
     for (0..self.table_metadata.columnCount()) |i| {
@@ -208,44 +191,53 @@ pub fn write(self: *Self, q: *queue.MessageQueue) !void {
         mailbox.resetDatabox();
     }
 
-    try self.stmt.connection.commit();
+    try self.conn.commit();
 }
 
 pub fn writeBatch(self: *Self, mailbox: *queue.Mailbox) !void {
-    // const dpi_var_array = &self.dpi_variables.dpi_var_array.?;
-    // const dpi_data_array = &self.dpi_variables.dpi_data_array.?;
-
     for (0..mailbox.data_index) |ri| {
         const record = mailbox.databox[ri].*.data.Record;
         for (record.items(), 0..) |column, ci| {
-            std.debug.print("\n REC {d} COLUMN {d}: {any}\n", .{ ri, ci, column });
             switch (column) {
                 .Int => |val| {
                     if (val) |v| {
+                        switch (self.table_metadata.columns.?[ci].native_type_num) {
+                            c.DPI_NATIVE_TYPE_INT64 => {
+                                self.dpi_variables.dpi_data_array.?[ci].?[ri].value.asInt64 = v;
+                            },
+                            c.DPI_NATIVE_TYPE_DOUBLE => {
+                                self.dpi_variables.dpi_data_array.?[ci].?[ri].value.asDouble = @floatFromInt(v);
+                            },
+                            else => unreachable, //todo
+                        }
                         self.dpi_variables.dpi_data_array.?[ci].?[ri].isNull = 0;
-                        self.dpi_variables.dpi_data_array.?[ci].?[ri].value.asDouble = @floatFromInt(v);
                     } else {
-                        std.debug.print("\nxxx int null ri: {d} ci: {d}\n", .{ ri, ci });
                         self.dpi_variables.dpi_data_array.?[ci].?[ri].isNull = 1;
                     }
                 },
                 .Number => |val| {
                     if (val) |v| {
+                        switch (self.table_metadata.columns.?[ci].native_type_num) {
+                            c.DPI_NATIVE_TYPE_INT64 => {
+                                self.dpi_variables.dpi_data_array.?[ci].?[ri].value.asInt64 = @intFromFloat(v);
+                            },
+                            c.DPI_NATIVE_TYPE_DOUBLE => {
+                                self.dpi_variables.dpi_data_array.?[ci].?[ri].value.asDouble = v;
+                            },
+                            else => unreachable, //todo
+                        }
                         self.dpi_variables.dpi_data_array.?[ci].?[ri].isNull = 0;
-                        self.dpi_variables.dpi_data_array.?[ci].?[ri].value.asDouble = v;
                     } else {
                         self.dpi_variables.dpi_data_array.?[ci].?[ri].isNull = 1;
                     }
                 },
                 .String => |val| {
                     if (val) |v| {
-                        std.debug.print("\n String value: {s}\n", .{v});
                         if (c.dpiVar_setFromBytes(self.dpi_variables.dpi_var_array.?[ci].?, @intCast(ri), v.ptr, @intCast(v.len)) < 0) {
                             std.debug.print("Failed to setFromBytes with error: {s}\n", .{self.conn.errorMessage()});
                             unreachable;
                         }
                     } else {
-                        std.debug.print("\nxxx string null ri: {d} ci: {d}\n", .{ ri, ci });
                         self.dpi_variables.dpi_data_array.?[ci].?[ri].isNull = 1;
                     }
                 },
@@ -254,7 +246,6 @@ pub fn writeBatch(self: *Self, mailbox: *queue.Mailbox) !void {
                         self.dpi_variables.dpi_data_array.?[ci].?[ri].isNull = 0;
                         self.dpi_variables.dpi_data_array.?[ci].?[ri].value.asBoolean = if (v) 1 else 0;
                     } else {
-                        std.debug.print("\nxxx bool null ri: {d} ci: {d}\n", .{ ri, ci });
                         self.dpi_variables.dpi_data_array.?[ci].?[ri].isNull = 1;
                     }
                 },
@@ -268,7 +259,6 @@ pub fn writeBatch(self: *Self, mailbox: *queue.Mailbox) !void {
                         self.dpi_variables.dpi_data_array.?[ci].?[ri].value.asTimestamp.minute = v.minute;
                         self.dpi_variables.dpi_data_array.?[ci].?[ri].value.asTimestamp.second = v.second;
                     } else {
-                        std.debug.print("\nxxx ts null ri: {d} ci: {d}\n", .{ ri, ci });
                         self.dpi_variables.dpi_data_array.?[ci].?[ri].isNull = 1;
                     }
                 },
@@ -278,13 +268,10 @@ pub fn writeBatch(self: *Self, mailbox: *queue.Mailbox) !void {
         }
     }
 
-    std.debug.print("\nNum iters: {d}\n", .{mailbox.data_index});
     self.stmt.executeMany(mailbox.data_index) catch {
         std.debug.print("Failed to executeMany with error: {s}\n", .{self.conn.errorMessage()});
         unreachable;
     };
-
-    try self.conn.commit();
 }
 
 test "batch-insert" {

@@ -178,8 +178,8 @@ pub fn newVariable(
     size_is_bytes: bool,
     is_array: bool,
     obj_type: ?*c.dpiObjectType,
-    @"var": *[*c]?*c.dpiVar,
-    data: *[*c][*c]c.dpiData,
+    @"var": [*c]?*c.dpiVar,
+    data: [*c][*c]c.dpiData,
 ) !void {
     if (c.dpiConn_newVar(
         self.dpi_conn,
@@ -190,8 +190,8 @@ pub fn newVariable(
         if (size_is_bytes) 1 else 0,
         if (is_array) 1 else 0,
         obj_type,
-        @"var".*,
-        data.*,
+        @"var",
+        data,
     ) < 0) {
         return error.FailedToCreateVariable;
     }
