@@ -187,8 +187,6 @@ pub const Mailbox = struct {
     }
 
     pub fn resetDatabox(self: *Mailbox) void {
-        std.debug.print("\ncrearing databox {d}\n", .{self.databox.len});
-
         for (self.databox, 0..) |node, i| {
             if (i == self.data_index) break;
             node.*.data.deinit(self.allocator);

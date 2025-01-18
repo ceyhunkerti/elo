@@ -100,7 +100,6 @@ pub fn initDpiVariables(self: *Self) !void {
     }
 
     for (0..self.table_metadata.columnCount()) |i| {
-        std.debug.print("i: {d}\n", .{i});
         if (c.dpiStmt_bindByPos(
             self.stmt.dpi_stmt,
             @as(u32, @intCast(i)) + 1,
@@ -361,19 +360,6 @@ test "batch-insert" {
         std.debug.print("c.dpiVar_setFromBytes error: {s}\n", .{writer.conn.errorMessage()});
         unreachable;
     }
-
-    // // second row
-    // // set id
-    // dpi_data_array.?[0].?[1].isNull = 0;
-    // dpi_data_array.?[0].?[1].value.asDouble = 2;
-
-    // // Set name
-    // dpi_data_array.?[1].?[1].isNull = 0; // Add this line
-    // const s2 = "s2";
-    // if (c.dpiVar_setFromBytes(dpi_var_array.?[1].?, 1, s2.ptr, 2) < 0) { // Change index to 1
-    //     std.debug.print("c.dpiVar_setFromBytes error: {s}\n", .{writer.conn.errorMessage()});
-    //     unreachable;
-    // }
 
     try writer.stmt.executeMany(1);
     try writer.conn.commit();
