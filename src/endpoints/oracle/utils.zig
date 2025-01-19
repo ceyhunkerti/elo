@@ -9,6 +9,7 @@ const c = @import("c.zig").c;
 
 const Error = error{
     TableNotFound,
+    ExpectedRecord,
 };
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -72,6 +73,20 @@ pub fn isTableExist(conn: *Connection, table: []const u8) !bool {
 pub fn dropTableIfExists(conn: *Connection, table: []const u8) !void {
     if (try isTableExist(conn, table)) {
         try dropTable(conn, table);
+    }
+}
+
+// mostly will be used for test purposes
+pub fn count(conn: *Connection, table_name: []const u8) !f64 {
+    const sql = try std.fmt.allocPrint(a, "select count(*) from {s}", .{table_name});
+    defer a.free(sql);
+    var stmt = try conn.prepareStatement(sql);
+    const record = try stmt.fetch(try stmt.execute());
+    if (record) |r| {
+        defer r.deinit(a);
+        return r.item(0).Double.?;
+    } else {
+        return error.ExpectedRecord;
     }
 }
 

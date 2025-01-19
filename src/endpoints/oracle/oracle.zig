@@ -83,7 +83,7 @@ test "oracle to oracle" {
 
     const producer = struct {
         pub fn producerThread(reader_: *Reader, wire: *w.Wire) !void {
-            reader_.read(wire) catch unreachable;
+            reader_.run(wire) catch unreachable;
         }
     };
     var wire = w.Wire.init();
@@ -93,23 +93,9 @@ test "oracle to oracle" {
 
     pth.join();
 
-    const count_sql = try std.fmt.allocPrint(
-        allocator,
-        \\select count(*) as cnt from {s}
-    ,
-        .{target_table},
-    );
-    defer allocator.free(count_sql);
+    const count = try u.count(writer.conn, target_table);
 
-    var cs = try writer.conn.prepareStatement(count_sql);
-    defer {
-        cs.release() catch unreachable;
-    }
-
-    var record = try cs.fetch(try cs.execute());
-    try std.testing.expect(record != null);
-    defer record.?.deinit(allocator);
-    try std.testing.expectEqual(record.?.item(0).Double, @as(f64, @floatFromInt(duals.items.len)));
+    try std.testing.expectEqual(count, @as(f64, @floatFromInt(duals.items.len)));
 
     try u.dropTableIfExists(writer.conn, target_table);
 

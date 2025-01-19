@@ -31,6 +31,10 @@ pub fn connect(self: Self) !void {
     return try self.conn.connect();
 }
 
+pub fn run(self: *Self, wire: *w.Wire) !void {
+    try self.read(wire);
+}
+
 pub fn read(self: Self, wire: *w.Wire) !void {
     var stmt = try self.conn.prepareStatement(self.options.sql);
     const column_count = try stmt.execute();
