@@ -41,7 +41,7 @@ pub fn read(self: Self, wire: *w.Wire) !void {
     wire.put(w.Term(self.allocator));
 }
 
-test read {
+test "Reader.read" {
     const allocator = std.testing.allocator;
 
     const tp = try t.getTestConnectionParams();
