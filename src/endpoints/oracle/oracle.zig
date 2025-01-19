@@ -49,7 +49,7 @@ test "oracle to oracle" {
 
     const so = o.SourceOptions{
         .connection = co,
-        .fetch_size = 1,
+        .fetch_size = 100,
         .sql = source_sql,
     };
 
