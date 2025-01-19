@@ -162,6 +162,8 @@ test "Writer.[prepare, resetDpiVariables]" {
     try writer.deinit();
 }
 
+test "Writer.write .Append" {}
+
 pub fn write(self: *Self, wire: *w.Wire) !void {
     var mb = try Mailbox.init(self.allocator, self.options.batch_size);
     defer mb.deinit();

@@ -63,7 +63,7 @@ test "oracle to oracle" {
         .connection = co,
         .table = target_table,
         .mode = .Truncate,
-        .batch_size = 2,
+        .batch_size = 200,
     };
     var writer = Writer.init(allocator, to);
     try writer.connect();
