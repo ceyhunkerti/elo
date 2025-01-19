@@ -3,10 +3,7 @@ const Allocator = std.mem.Allocator;
 const Statement = @import("../Statement.zig");
 const Column = @import("./Column.zig");
 const Connection = @import("../Connection.zig");
-const commons = @import("../../../commons.zig");
-const Record = commons.Record;
-const FieldValue = commons.FieldValue;
-const RecordAsMap = commons.RecordAsMap;
+const p = @import("../../../wire/proto.zig");
 const utils = @import("../utils.zig");
 const c = @import("../c.zig").c;
 
@@ -114,9 +111,9 @@ pub fn fetch(allocator: Allocator, conn: *Connection, table_name: []const u8) !S
             .native_type_num = utils.toDpiNativeTypeNum(data_type.?),
             .oracle_type_name = if (data_type) |d| try allocator.dupe(u8, d) else null,
             .length = std.math.lossyCast(u32, length.?),
-            .precision = if (precision) |p| std.math.lossyCast(u32, p) else null,
-            .scale = if (scale) |s| std.math.lossyCast(u32, s) else null,
-            .default = if (default) |d| try allocator.dupe(u8, d) else null,
+            .precision = if (precision) |precision_| std.math.lossyCast(u32, precision_) else null,
+            .scale = if (scale) |scale_| std.math.lossyCast(u32, scale_) else null,
+            .default = if (default) |default_| try allocator.dupe(u8, default_) else null,
         });
     }
 

@@ -1,14 +1,11 @@
 const std = @import("std");
 const zdt = @import("zdt");
 const StringHashMap = std.StringHashMap;
+const w = @import("wire.zig");
+const M = @import("M.zig");
 
 const Error = error{
     RecordFieldCapacityExceeded,
-};
-
-pub const EndpointType = enum {
-    Source,
-    Sink,
 };
 
 pub const FieldType = enum {
@@ -19,7 +16,6 @@ pub const FieldType = enum {
     Number,
     Boolean,
     Array,
-    Map,
     Json,
 };
 
@@ -59,8 +55,7 @@ pub const Value = union(FieldType) {
     Number: ?f64,
     Boolean: ?bool,
     Array: ?[]Value,
-    Map: ?ValueMap,
-    Json: ?ValueMap,
+    Json: ?ValueDictionary,
 
     pub fn deinit(self: Value, allocator: std.mem.Allocator) void {
         switch (self) {
@@ -78,26 +73,26 @@ pub const Value = union(FieldType) {
     }
 };
 
-pub const ValueMap = struct {
-    map: std.StringHashMap(Value),
+pub const ValueDictionary = struct {
+    dict: std.StringHashMap(Value),
 
-    pub fn init(allocator: std.mem.Allocator) !ValueMap {
+    pub fn init(allocator: std.mem.Allocator) !ValueDictionary {
         return .{
-            .map = std.StringHashMap(Value).init(allocator),
+            .dict = std.StringHashMap(Value).init(allocator),
         };
     }
-    pub fn deinit(self: *ValueMap) void {
-        self.map.deinit();
+    pub fn deinit(self: *ValueDictionary) void {
+        self.dict.deinit();
     }
 
-    pub fn put(self: *ValueMap, name: []const u8, value: Value) !void {
-        try self.map.put(name, value);
+    pub fn put(self: *ValueDictionary, name: []const u8, value: Value) !void {
+        try self.dict.put(name, value);
     }
-    pub fn get(self: ValueMap, name: []const u8) ?Value {
-        return self.map.get(name);
+    pub fn get(self: ValueDictionary, name: []const u8) ?Value {
+        return self.dict.get(name);
     }
-    pub fn count(self: ValueMap) usize {
-        return self.map.count();
+    pub fn count(self: ValueDictionary) usize {
+        return self.dict.count();
     }
 };
 
@@ -114,6 +109,12 @@ pub const Record = struct {
         var record = try Record.init(allocator, values.len);
         try record.appendSlice(values);
         return record;
+    }
+
+    pub fn Message(allocator: std.mem.Allocator, values: []const Value) !*w.Message {
+        const msg = try allocator.create(w.Message);
+        msg.* = .{ .data = .{ .Record = try Record.fromSlice(allocator, values) } };
+        return msg;
     }
 
     pub fn deinit(self: Record, allocator: std.mem.Allocator) void {
@@ -149,12 +150,16 @@ pub const Record = struct {
     }
 
     // record still owns the value memory
-    pub fn asMap(self: Record, allocator: std.mem.Allocator, names: []const []const u8) !ValueMap {
-        var map = try ValueMap.init(allocator);
+    pub fn asMap(self: Record, allocator: std.mem.Allocator, names: []const []const u8) !ValueDictionary {
+        var map = try ValueDictionary.init(allocator);
         for (names, self.values.items) |name, value| {
             try map.put(name, value);
         }
         return map;
+    }
+
+    pub fn asMessage(self: Record, allocator: std.mem.Allocator) !*w.Message {
+        return try M.new(allocator, self);
     }
 };
 

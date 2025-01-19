@@ -1,11 +1,13 @@
 const std = @import("std");
 const Connection = @import("../Connection.zig");
 const SourceOptions = @import("../options.zig").SourceOptions;
-const MessageQueue = @import("../../../queue.zig").MessageQueue;
+
+const utils = @import("../utils.zig");
+const w = @import("../../../wire/wire.zig");
+const M = @import("../../../wire/M.zig");
 
 const t = @import("../testing/testing.zig");
 
-const utils = @import("../utils.zig");
 const Self = @This();
 
 allocator: std.mem.Allocator,
@@ -29,25 +31,18 @@ pub fn connect(self: Self) !void {
     return try self.conn.connect();
 }
 
-pub fn read(self: Self, q: *MessageQueue) !void {
+pub fn read(self: Self, wire: *w.Wire) !void {
     var stmt = try self.conn.prepareStatement(self.options.sql);
     const column_count = try stmt.execute();
     while (true) {
         const record = try stmt.fetch(column_count) orelse break;
-        const node = self.allocator.create(MessageQueue.Node) catch unreachable;
-        node.* = .{ .data = .{ .Record = record } };
-        q.put(node);
+        wire.put(try record.asMessage(self.allocator));
     }
-
-    const term = self.allocator.create(MessageQueue.Node) catch unreachable;
-    term.* = .{ .data = .Nil };
-    q.put(term);
+    wire.put(w.Term(self.allocator));
 }
 
 test read {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
+    const allocator = std.testing.allocator;
 
     const tp = try t.getTestConnectionParams();
     const options = SourceOptions{
@@ -63,8 +58,8 @@ test read {
 
     var reader = Self.init(allocator, options);
     try reader.connect();
-    var queue = MessageQueue.init();
-    try reader.read(&queue);
+    var wire = w.Wire.init();
+    try reader.read(&wire);
 
     var message_count: usize = 0;
     var term_received: bool = false;
@@ -73,13 +68,16 @@ test read {
         if (loop_count > 1) {
             unreachable;
         }
-        switch (queue.get().data) {
+        const message = wire.get();
+        defer M.deinit(allocator, message);
+
+        switch (message.data) {
             .Metadata => {},
             .Record => |record| {
                 message_count += 1;
-                try std.testing.expectEqual(record.len, 2);
-                try std.testing.expectEqual(record[0].Double, 1);
-                try std.testing.expectEqual(record[1].Double, 2);
+                try std.testing.expectEqual(record.len(), 2);
+                try std.testing.expectEqual(record.item(0).Double, 1);
+                try std.testing.expectEqual(record.item(1).Double, 2);
             },
             .Nil => {
                 term_received = true;
@@ -87,4 +85,5 @@ test read {
             },
         }
     }
+    try reader.deinit();
 }

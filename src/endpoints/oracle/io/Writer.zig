@@ -3,12 +3,12 @@ const std = @import("std");
 const Connection = @import("../Connection.zig");
 const Statement = @import("../Statement.zig");
 const SinkOptions = @import("../options.zig").SinkOptions;
-const queue = @import("../../../queue.zig");
+
+const w = @import("../../../wire/wire.zig");
+const p = @import("../../../wire/proto.zig");
+const Mailbox = @import("../../../wire/Mailbox.zig");
+
 const TableMetadata = @import("../metadata/TableMetadata.zig");
-const CreateTableScript = @import("../metadata/script.zig").CreateTableScript;
-const commons = @import("../../../commons.zig");
-const Record = commons.Record;
-const Value = commons.Value;
 const t = @import("../testing/testing.zig");
 const utils = @import("../utils.zig");
 const zdt = @import("zdt");
@@ -162,41 +162,40 @@ test "Writer.[prepare, resetDpiVariables]" {
     try writer.deinit();
 }
 
-pub fn write(self: *Self, q: *queue.MessageQueue) !void {
-    var mailbox = try queue.Mailbox.init(self.allocator, self.options.batch_size);
-    defer mailbox.deinit();
+pub fn write(self: *Self, wire: *w.Wire) !void {
+    var mb = try Mailbox.init(self.allocator, self.options.batch_size);
+    defer mb.deinit();
 
-    break_while: while (true) {
-        const node = q.get();
-        switch (node.data) {
-            // we are not interested in metadata here
-            .Metadata => mailbox.appendMetadata(node),
+    while (true) {
+        const message = wire.get();
+        switch (message.data) {
+            .Metadata => mb.sendToMetadata(message),
             .Record => {
-                mailbox.appendData(node);
-                if (mailbox.isDataboxFull()) {
-                    try self.writeBatch(&mailbox);
+                mb.sendToInbox(message);
+                if (mb.isInboxFull()) {
+                    try self.writeBatch(&mb);
                     try self.conn.commit();
-                    mailbox.resetDatabox();
+                    mb.clearInbox();
                 }
             },
             .Nil => {
-                mailbox.appendNil(node);
-                break :break_while;
+                mb.sendToNil(message);
+                break;
             },
         }
     }
-    if (mailbox.hasData()) {
-        try self.writeBatch(&mailbox);
+    if (mb.inboxNotEmpty()) {
+        try self.writeBatch(&mb);
         try self.conn.commit();
-        mailbox.resetDatabox();
+        mb.clearInbox();
     }
 
     try self.conn.commit();
 }
 
-pub fn writeBatch(self: *Self, mailbox: *queue.Mailbox) !void {
-    for (0..mailbox.data_index) |ri| {
-        const record = mailbox.databox[ri].*.data.Record;
+pub fn writeBatch(self: *Self, mb: *Mailbox) !void {
+    for (0..mb.inbox_index) |ri| {
+        const record = mb.inbox[ri].*.data.Record;
         for (record.items(), 0..) |column, ci| {
             switch (column) {
                 .Int => |val| {
@@ -321,7 +320,7 @@ pub fn writeBatch(self: *Self, mailbox: *queue.Mailbox) !void {
         }
     }
 
-    self.stmt.executeMany(mailbox.data_index) catch {
+    self.stmt.executeMany(mb.inbox_index) catch {
         std.debug.print("Failed to executeMany with error: {s}\n", .{self.conn.errorMessage()});
         unreachable;
     };
@@ -409,8 +408,7 @@ test "batch-insert" {
 
     // Set name
     dpi_data_array.?[1].?[0].isNull = 0; // Add this line
-    const s1 = "s1";
-    if (c.dpiVar_setFromBytes(dpi_var_array.?[1].?, 0, s1.ptr, 2) < 0) { // Change index to 0
+    if (c.dpiVar_setFromBytes(dpi_var_array.?[1].?, 0, "s1".ptr, 2) < 0) { // Change index to 0
         std.debug.print("c.dpiVar_setFromBytes error: {s}\n", .{writer.conn.errorMessage()});
         unreachable;
     }
@@ -460,12 +458,12 @@ test "Writer.write" {
 
     try std.testing.expectEqual(5, writer.table_metadata.columnCount());
 
-    var q = queue.MessageQueue.init();
+    var wire = w.Wire.init();
 
     // first record
-    const record1 = Record.fromSlice(
+    const r1 = p.Record.fromSlice(
         allocator,
-        &[_]commons.Value{
+        &[_]p.Value{
             .{ .Number = 1 }, //id
             .{ .String = try allocator.dupe(u8, "John") }, //name
             .{ .Number = 20 }, //age
@@ -473,42 +471,34 @@ test "Writer.write" {
             .{ .Boolean = true }, //is_active
         },
     ) catch unreachable;
-    const message1 = queue.Message{ .Record = record1 };
-    const node1 = try allocator.create(queue.MessageQueue.Node);
-    node1.* = .{ .data = message1 };
-    q.put(node1);
+    const m1 = r1.asMessage(allocator) catch unreachable;
+    wire.put(m1);
 
     // second record
-    const record2 = Record.fromSlice(allocator, &[_]commons.Value{
+    const r2 = p.Record.fromSlice(allocator, &[_]p.Value{
         .{ .Int = 2 }, //id
         .{ .String = try allocator.dupe(u8, "Jane") }, //name
         .{ .Int = 21 }, //age
         .{ .TimeStamp = try zdt.Datetime.now(null) }, //birth_date
         .{ .Boolean = false }, //is_active
     }) catch unreachable;
-    const message2 = queue.Message{ .Record = record2 };
-    const node2 = try allocator.create(queue.MessageQueue.Node);
-    node2.* = .{ .data = message2 };
-    q.put(node2);
+    const m2 = r2.asMessage(allocator) catch unreachable;
+    wire.put(m2);
 
     // third record with unicode
-    const record3 = Record.fromSlice(allocator, &[_]commons.Value{
+    const record3 = p.Record.fromSlice(allocator, &[_]p.Value{
         .{ .Int = 3 }, //id
         .{ .String = try allocator.dupe(u8, "Έ Ή") }, //name
         .{ .Int = 22 }, //age
         .{ .TimeStamp = try zdt.Datetime.now(null) }, //birth_date
         .{ .Boolean = true }, //is_active
     }) catch unreachable;
-    const message3 = queue.Message{ .Record = record3 };
-    const node3 = try allocator.create(queue.MessageQueue.Node);
-    node3.* = .{ .data = message3 };
-    q.put(node3);
+    const m3 = record3.asMessage(allocator) catch unreachable;
+    wire.put(m3);
 
-    const term = try allocator.create(queue.MessageQueue.Node);
-    term.* = .{ .data = .Nil };
-    q.put(term);
+    wire.put(w.Term(allocator));
 
-    try writer.write(&q);
+    try writer.write(&wire);
     errdefer {
         std.debug.print("Error in writer.write with error: {s}\n", .{writer.conn.errorMessage()});
     }
