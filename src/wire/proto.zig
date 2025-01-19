@@ -2,6 +2,7 @@ const std = @import("std");
 const zdt = @import("zdt");
 const StringHashMap = std.StringHashMap;
 const w = @import("wire.zig");
+const M = @import("M.zig");
 
 const Error = error{
     RecordFieldCapacityExceeded,
@@ -15,7 +16,6 @@ pub const FieldType = enum {
     Number,
     Boolean,
     Array,
-    Map,
     Json,
 };
 
@@ -55,7 +55,6 @@ pub const Value = union(FieldType) {
     Number: ?f64,
     Boolean: ?bool,
     Array: ?[]Value,
-    Map: ?ValueDictionary,
     Json: ?ValueDictionary,
 
     pub fn deinit(self: Value, allocator: std.mem.Allocator) void {
@@ -79,21 +78,21 @@ pub const ValueDictionary = struct {
 
     pub fn init(allocator: std.mem.Allocator) !ValueDictionary {
         return .{
-            .map = std.StringHashMap(Value).init(allocator),
+            .dict = std.StringHashMap(Value).init(allocator),
         };
     }
     pub fn deinit(self: *ValueDictionary) void {
-        self.map.deinit();
+        self.dict.deinit();
     }
 
     pub fn put(self: *ValueDictionary, name: []const u8, value: Value) !void {
-        try self.map.put(name, value);
+        try self.dict.put(name, value);
     }
     pub fn get(self: ValueDictionary, name: []const u8) ?Value {
-        return self.map.get(name);
+        return self.dict.get(name);
     }
     pub fn count(self: ValueDictionary) usize {
-        return self.map.count();
+        return self.dict.count();
     }
 };
 
@@ -112,8 +111,10 @@ pub const Record = struct {
         return record;
     }
 
-    pub fn Message(allocator: std.mem.Allocator, values: []const Value) !w.Message {
-        return .{ .data = .{ .Record = try Record.fromSlice(allocator, values) } };
+    pub fn Message(allocator: std.mem.Allocator, values: []const Value) !*w.Message {
+        const msg = try allocator.create(w.Message);
+        msg.* = .{ .data = .{ .Record = try Record.fromSlice(allocator, values) } };
+        return msg;
     }
 
     pub fn deinit(self: Record, allocator: std.mem.Allocator) void {
@@ -157,8 +158,8 @@ pub const Record = struct {
         return map;
     }
 
-    pub fn asMessage(self: Record, allocator: std.mem.Allocator) !w.Message {
-        return try w.Message.new(allocator, self);
+    pub fn asMessage(self: Record, allocator: std.mem.Allocator) !*w.Message {
+        return try M.new(allocator, self);
     }
 };
 

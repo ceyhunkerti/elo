@@ -2,8 +2,8 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const ConnectionOptions = @import("./options.zig").ConnectionOptions;
 const Connection = @import("./Connection.zig");
-const MessageQueue = @import("../../queue.zig").MessageQueue;
-const Metadata = @import("../../commons.zig").Metadata;
+const w = @import("../../wire/wire.zig");
+const p = @import("../../wire/proto.zig");
 
 const c = @import("c.zig").c;
 
@@ -109,12 +109,12 @@ pub fn toDpiNativeTypeNum(type_name: []const u8) c.dpiNativeTypeNum {
     }
 }
 
-pub fn expectMetadata(q: *MessageQueue) !*const Metadata {
-    const message = q.get();
+pub fn expectMetadata(wire: *w.Wire) !*const p.Metadata {
+    const message = wire.get();
     switch (message.data) {
         .Metadata => |m| return m,
         else => {
-            q.put(message);
+            wire.put(message);
             return error.MetadataNotReceived;
         },
     }

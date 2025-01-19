@@ -2,9 +2,8 @@ const std = @import("std");
 const w = @import("wire.zig");
 const p = @import("proto.zig");
 
-const Message = @import("Message.zig");
-
 const Self = @This();
+const M = @import("M.zig");
 
 allocator: std.mem.Allocator,
 
@@ -29,14 +28,13 @@ pub fn deinit(self: *Self) void {
     defer self.metadatabox.deinit();
     defer self.nilbox.deinit();
 
-    if (self.hasData()) {
-        self.resetDatabox();
+    if (self.inboxNotEmpty()) {
+        self.clearInbox();
     }
     self.allocator.free(self.inbox);
 
     for (self.metadatabox.items) |node| {
-        defer self.allocator.destroy(node);
-        node.data.deinit(self.allocator);
+        M.deinit(self.allocator, node);
     }
 
     for (self.nilbox.items) |node| {
@@ -46,16 +44,15 @@ pub fn deinit(self: *Self) void {
 
 pub fn clearInbox(self: *Self) void {
     for (self.inbox, 0..) |node, i| {
-        if (i == self.data_index) break;
-        node.*.data.deinit(self.allocator);
-        self.allocator.destroy(node);
+        if (i == self.inbox_index) break;
+        M.deinit(self.allocator, node);
     }
-    self.data_index = 0;
+    self.inbox_index = 0;
 }
 
 pub fn sendToInbox(self: *Self, node: *w.Message) void {
-    self.inbox[self.data_index] = node;
-    self.data_index += 1;
+    self.inbox[self.inbox_index] = node;
+    self.inbox_index += 1;
 }
 
 pub fn sendSliceToInbox(self: *Self, nodes: []*w.Message) void {
@@ -65,11 +62,11 @@ pub fn sendSliceToInbox(self: *Self, nodes: []*w.Message) void {
 }
 
 pub fn isInboxFull(self: *Self) bool {
-    return self.data_index == self.data_capacity;
+    return self.inbox_index == self.inbox_capacity;
 }
 
-pub fn hasData(self: *Self) bool {
-    return self.data_index > 0;
+pub fn inboxNotEmpty(self: *Self) bool {
+    return self.inbox_index > 0;
 }
 
 pub fn sendToMetadata(self: *Self, node: *w.Message) void {
@@ -86,19 +83,20 @@ test "Mailbox" {
     var mailbox = try Self.init(allocator, 2);
     defer mailbox.deinit();
 
-    mailbox.sendSliceToInbox(&[_]*w.Message{
-        p.Record.Message(allocator, &[_]p.Value{
-            .{ .Int = 1 },
-            .{ .Boolean = true },
-        }) catch unreachable,
-        p.Record.Message(allocator, &[_]p.Value{
-            .{ .Int = 2 },
-            .{ .Boolean = false },
-        }) catch unreachable,
-    });
+    const m1 = p.Record.Message(allocator, &[_]p.Value{
+        .{ .Int = 1 },
+        .{ .Boolean = true },
+    }) catch unreachable;
+    const m2 = p.Record.Message(allocator, &[_]p.Value{
+        .{ .Int = 2 },
+        .{ .Boolean = false },
+    }) catch unreachable;
+    var messages = [_]*w.Message{ m1, m2 };
+
+    mailbox.sendSliceToInbox(&messages);
 
     try std.testing.expectEqual(mailbox.inbox_index, 2);
     try std.testing.expect(mailbox.inbox.len == 2);
-    try std.testing.expect(mailbox.hasData());
+    try std.testing.expect(mailbox.inboxNotEmpty());
     try std.testing.expect(mailbox.isInboxFull());
 }

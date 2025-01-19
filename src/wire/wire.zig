@@ -4,6 +4,7 @@ const builtin = @import("builtin");
 const assert = std.debug.assert;
 const testing = std.testing;
 const p = @import("proto.zig");
+const M = @import("M.zig");
 
 pub fn AtomicBlockingQueue(comptime T: type) type {
     return struct {
@@ -92,10 +93,10 @@ pub const Datum = union(enum) {
 pub const Wire = AtomicBlockingQueue(Datum);
 pub const Message = Wire.Node;
 
-pub fn Term(allocator: Allocator) !*Message {
-    const result = allocator.create(Message) catch unreachable;
-    result.* = .{ .data = .Nil };
-    return result;
+pub fn Term(allocator: Allocator) *Message {
+    const msg = allocator.create(Message) catch unreachable;
+    msg.* = .{ .data = .Nil };
+    return msg;
 }
 
 test "Wire" {
@@ -113,18 +114,16 @@ test "Wire" {
 
     var producer_thread = try std.Thread.spawn(.{ .allocator = allocator }, producer.producerThread, .{ allocator, &wire });
 
-    break_while: while (true) {
+    while (true) {
         const message = wire.get();
-        defer message.data.deinit(allocator);
-        defer allocator.destroy(message);
-
+        defer M.deinit(allocator, message);
         switch (message.data) {
             .Metadata => |_| {},
             .Record => |record| {
                 try testing.expectEqual(1, record.item(0).Int);
                 try testing.expectEqual(true, record.item(1).Boolean);
             },
-            .Nil => break :break_while,
+            .Nil => break,
         }
     }
 
@@ -136,12 +135,10 @@ test "MessageQueue sync" {
 
     var wire = Wire.init();
     const record = p.Record.fromSlice(allocator, &[_]p.Value{ .{ .Int = 1 }, .{ .Boolean = true } }) catch unreachable;
-    const message = Message{ .Record = record };
-    var ms = Message{ .data = message, .next = undefined, .prev = undefined };
-    wire.put(&ms);
+    wire.put(record.asMessage(allocator) catch unreachable);
 
     const mr = wire.get();
-    defer mr.data.deinit(allocator);
+    defer M.deinit(allocator, mr);
 
     try testing.expectEqual(1, mr.data.Record.item(0).Int);
 }

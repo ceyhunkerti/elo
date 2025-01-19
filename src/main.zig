@@ -1,6 +1,8 @@
 const std = @import("std");
-const wire = @import("wire/wire.zig");
-const Mailbox = @import("wire/Mailbox.zig");
+pub const wire = @import("wire/wire.zig");
+pub const Mailbox = @import("wire/Mailbox.zig");
+
+pub const oracle = @import("endpoints/oracle/oracle.zig");
 
 pub fn main() !void {}
 

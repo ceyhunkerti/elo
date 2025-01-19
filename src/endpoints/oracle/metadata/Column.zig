@@ -3,7 +3,6 @@ const Allocator = std.mem.Allocator;
 const c = @import("../c.zig").c;
 const Statement = @import("../Statement.zig");
 const Self = @This();
-const FieldValue = @import("../../../commons.zig").FieldValue;
 
 allocator: Allocator = undefined,
 index: u32,

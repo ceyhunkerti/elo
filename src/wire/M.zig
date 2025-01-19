@@ -10,9 +10,9 @@ pub fn new(allocator: Allocator, val: anytype) !*w.Message {
     const message = try allocator.create(w.Message);
     message.* = .{
         .data = switch (@TypeOf(val)) {
-            p.Metadata => .{ .data = .{ .Metadata = val } },
-            p.Record => .{ .data = .{ .Record = val } },
-            else => .{ .data = .Nil },
+            p.Metadata => .{ .Metadata = val },
+            p.Record => .{ .Record = val },
+            else => .Nil,
         },
     };
     return message;
