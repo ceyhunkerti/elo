@@ -9,6 +9,7 @@ const Error = error{
     ServerAttachFailed,
     ErrorHandleInitFailed,
     ConnectionError,
+    ConnectionDeinitError,
 };
 
 const Self = @This();
@@ -20,7 +21,7 @@ oci_server: ?*c.OCIServer = null, // service context
 oci_service_context: ?*c.OCISvcCtx = null,
 oci_session: ?*c.OCISession = null,
 
-//
+// authentication variables
 connection_string: []const u8,
 username: []const u8,
 password: []const u8,
@@ -157,6 +158,30 @@ pub fn init(
     };
 }
 
+pub fn deinit(self: *Self) !void {
+    var error_code: i32 = 0;
+    if (self.oci_server) |oci_server| {
+        if (self.oci_err_handle) |oci_err_handle| {
+            if (c.OCIServerDetach(oci_server, oci_err_handle, c.OCI_DEFAULT) != c.OCI_SUCCESS) {
+                try e.printError(oci_err_handle, c.OCI_HTYPE_ERROR, &error_code);
+                return error.ConnectionDeinitError;
+            }
+            if (c.OCIHandleFree(oci_server, c.OCI_HTYPE_SERVER) != c.OCI_SUCCESS) {
+                try e.printError(oci_err_handle, c.OCI_HTYPE_ERROR, &error_code);
+                return error.ConnectionDeinitError;
+            }
+        }
+    }
+
+    if (self.oci_service_context) |oci_service_context| {
+        _ = c.OCIHandleFree(oci_service_context, c.OCI_HTYPE_SVCCTX);
+    }
+    if (self.oci_err_handle) |oci_err_handle| {
+        _ = c.OCIHandleFree(oci_err_handle, c.OCI_HTYPE_ERROR);
+    }
+}
+
 test "Connection.serverAttach" {
-    _ = try Self.init("localhost/ORCLPDB1", "demo", "demo");
+    var conn = try Self.init("localhost/ORCLPDB1", "demo", "demo");
+    try conn.deinit();
 }
