@@ -47,10 +47,13 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     exe.linkLibC();
+
     exe.addCSourceFile(.{
         .file = b.path("lib/oracle/odpi-5.4.1/embed/dpi.c"),
     });
     exe.addIncludePath(b.path("lib/oracle/odpi-5.4.1/include"));
+    exe.linkSystemLibrary("libpq");
+    exe.addIncludePath(.{ .cwd_relative = "/usr/include/postgresql" });
 
     exe.root_module.addImport("zdt", zdt.module("zdt"));
 
@@ -88,6 +91,8 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     exe_unit_tests.linkLibC();
+    exe_unit_tests.linkSystemLibrary("libpq");
+    exe_unit_tests.addIncludePath(.{ .cwd_relative = "/usr/include/postgresql" });
 
     exe_unit_tests.addCSourceFile(.{
         .file = b.path("lib/oracle/odpi-5.4.1/embed/dpi.c"),
