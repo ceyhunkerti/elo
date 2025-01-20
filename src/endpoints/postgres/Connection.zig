@@ -38,7 +38,6 @@ pub fn deinit(self: *Self) void {
     if (self.connection_string) |cs| self.allocator.free(cs);
     self.disconnect();
 }
-
 test "Connection.init" {
     var conn = Self.init(
         std.testing.allocator,
