@@ -1,3 +1,3 @@
 pub const c = @cImport({
-    @cInclude("libpq-fe.h");
+    @cInclude("oci.h");
 });

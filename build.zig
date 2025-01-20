@@ -51,6 +51,10 @@ pub fn build(b: *std.Build) void {
     exe.addCSourceFile(.{
         .file = b.path("lib/oracle/odpi-5.4.1/embed/dpi.c"),
     });
+    exe.addLibraryPath(b.path("deps/instantclient_21_16"));
+    exe.linkSystemLibrary("clntsh");
+
+    exe.addIncludePath(b.path("lib/oracle/sdk/include"));
     exe.addIncludePath(b.path("lib/oracle/odpi-5.4.1/include"));
     exe.linkSystemLibrary("libpq");
     exe.addIncludePath(.{ .cwd_relative = "/usr/include/postgresql" });
@@ -97,6 +101,9 @@ pub fn build(b: *std.Build) void {
     exe_unit_tests.addCSourceFile(.{
         .file = b.path("lib/oracle/odpi-5.4.1/embed/dpi.c"),
     });
+    exe_unit_tests.addLibraryPath(b.path("deps/instantclient_21_16"));
+    exe_unit_tests.linkSystemLibrary("clntsh");
+    exe_unit_tests.addIncludePath(b.path("lib/oracle/sdk/include"));
     exe_unit_tests.addIncludePath(b.path("lib/oracle/odpi-5.4.1/include"));
     exe_unit_tests.root_module.addImport("zdt", zdt.module("zdt"));
 

@@ -4,6 +4,8 @@ pub const Reader = @import("io/Reader.zig");
 pub const Writer = @import("io/Writer.zig");
 pub const TableMetadata = @import("metadata/TableMetadata.zig");
 
+pub const oci = @import("oci/oci.zig");
+
 const std = @import("std");
 test {
     std.testing.refAllDecls(@This());
