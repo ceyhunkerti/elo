@@ -15,10 +15,10 @@ const Error = error{
 const Self = @This();
 
 // oci variables
-oci_err_handle: ?*c.OCIError = null, // oci environment handle
-oci_env: ?*c.OCIEnv = null, // server handle
-oci_server: ?*c.OCIServer = null, // service context
-oci_service_context: ?*c.OCISvcCtx = null,
+oci_err_handle: ?*c.OCIError = null, // oci error handle
+oci_env: ?*c.OCIEnv = null,
+oci_server: ?*c.OCIServer = null, // server handle
+oci_service_context: ?*c.OCISvcCtx = null, // service context
 oci_session: ?*c.OCISession = null,
 
 // authentication variables
