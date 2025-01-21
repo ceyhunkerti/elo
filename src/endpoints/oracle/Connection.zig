@@ -7,7 +7,9 @@ const t = @import("testing/testing.zig");
 const Statement = @import("Statement.zig");
 
 const c = @import("c.zig").c;
-// pub const Statement = @import("Statement.zig");
+const oci = @cImport({
+    @cInclude("oci.h");
+});
 
 const Self = @This();
 
@@ -115,6 +117,15 @@ pub fn connect(self: *Self) !void {
     try self.createContext();
     var create_params = try self.dpiConnCreateParams();
 
+    // create_params
+
+    // c.
+
+    // if (dpiOci__attrGet(createParams->externalHandle, DPI_OCI_HTYPE_SVCCTX,
+    //             &envHandle, NULL, DPI_OCI_ATTR_ENV, "get env handle",
+    //             error) < 0)
+    //         return DPI_FAILURE;
+
     var dpi_conn: ?*c.dpiConn = null;
     if (c.dpiConn_create(
         self.context.dpi_context,
@@ -140,6 +151,22 @@ pub fn connect(self: *Self) !void {
 test "connect" {
     var conn = try t.getTestConnection(testing.allocator);
     try conn.connect();
+    try conn.deinit();
+}
+
+test "dpi env" {
+    var conn = try t.getTestConnection(testing.allocator);
+    try conn.connect();
+
+    // DPI_EXPORT int dpiConn_getOciAttr(dpiConn *conn, uint32_t handleType,
+    //     uint32_t attribute, dpiDataBuffer *value, uint32_t *valueLength);
+
+    const dpi_env = conn.dpi_conn.?.*.env;
+    _ = dpi_env;
+
+    //  dpiEnv *env,
+
+    try conn.deinit();
 }
 
 pub fn createStatement(self: *Self) Statement {

@@ -1,3 +1,3 @@
-const c = @cImport({
+pub const c = @cImport({
     @cInclude("libpq-fe.h");
 });
