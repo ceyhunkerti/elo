@@ -2,54 +2,22 @@ const std = @import("std");
 const e = @import("error.zig");
 const c = @import("c.zig").c;
 const Connection = @import("Connection.zig");
-const types = @import("types.zig");
+const QueryInfo = @import("QueryInfo.zig");
 
 pub const Error = error{
+    Error,
     OCIDescriptorFreeFailed,
 };
 
 const Self = @This();
 
-pub const QueryVariableTypeInfo = struct {
-    oracle_type: c_int, // c.SQLT_*
-};
-
-pub const QueryVariable = struct {
-    name: []const u8,
-    type_info: QueryVariableTypeInfo,
-};
-
-pub const QueryInfo = struct {
-    allocator: std.mem.Allocator,
-    column_count: u32 = 0,
-    variables: std.ArrayList(QueryVariable),
-
-    pub fn init(allocator: std.mem.Allocator, column_count: u32) !QueryInfo {
-        return QueryInfo{
-            .allocator = allocator,
-            .column_count = column_count,
-            .variables = try std.ArrayList(QueryVariable).initCapacity(allocator, column_count),
-        };
-    }
-
-    pub fn variableName(self: QueryInfo, i: usize) []const u8 {
-        return self.variables.items[i].name;
-    }
-
-    pub fn variableTypeInfo(self: QueryInfo, i: usize) QueryVariableTypeInfo {
-        return self.variables.items[i].type_info;
-    }
-
-    pub fn deinit(self: *QueryInfo) void {
-        self.variables.deinit();
-    }
-};
-
 oci_err_handle: ?*c.OCIError = null,
 oci_stmt: ?*c.OCIStmt = null,
+oci_define: ?*c.OCIDefine = null,
 
 allocator: std.mem.Allocator,
 conn: *Connection = undefined,
+query_info: ?QueryInfo = null,
 
 pub fn init(allocator: std.mem.Allocator, conn: *Connection) !Self {
     var oci_stmt: ?*c.OCIStmt = null;
@@ -73,6 +41,19 @@ pub fn init(allocator: std.mem.Allocator, conn: *Connection) !Self {
         .oci_stmt = oci_stmt,
         .oci_err_handle = oci_err_handle,
     };
+}
+
+pub fn deinit(self: *Self) !void {
+    if (self.query_info) |*qi| {
+        qi.deinit();
+    }
+    // if (self.oci_stmt) |oci_stmt| {
+    //     _ = c.OCIHandleFree(oci_stmt, c.OCI_HTYPE_STMT);
+    // }
+    // if (self.oci_err_handle) |oci_err_handle| {
+    //     _ = c.OCIHandleFree(oci_err_handle, c.OCI_HTYPE_ERROR);
+    // }
+
 }
 
 pub fn prepare(self: *Self, sql: []const u8) !void {
@@ -103,7 +84,38 @@ pub fn describe(self: *Self) !void {
             c.OCI_DESCRIBE_ONLY,
         ),
     );
+    if (self.query_info) |*qi| {
+        qi.deinit();
+    }
+    self.query_info = try QueryInfo.init(self.allocator, self);
 }
+
+// pub fn define(self: *Self) !void {
+//     if(self.query_info == null) {
+//         try self.describe();
+//     }
+//     const qi = self.query_info.?;
+
+//     for (0..qi.variables.items.len) |i| {
+//         try e.check(
+//         self.oci_err_handle,
+//         c.OCIDefineByPos(
+//             self.oci_stmt,
+//             @ptrCast(&self.oci_define),
+//             self.oci_err_handle,
+//             @intCast(i + 1),
+//             0,
+//             null,
+//             0,
+//             c.OCI_DTYPE_LOB,
+//         )
+//         )
+//     }
+
+//   checkerr(errhp, OCIDefineByPos(stmthp, &defnp, errhp, 1, (dvoid *) &empno,
+//                    (sword) sizeof(sword), SQLT_INT, (dvoid *) 0, (ub2 *)0,
+//                    (ub2 *)0, OCI_DEFAULT));
+// }
 
 pub fn execute(self: *Self) !void {
     try e.check(
@@ -127,91 +139,6 @@ test "Statement.[init,prepare]" {
 
     try stmt.prepare("SELECT * FROM DUAL");
 
+    try stmt.deinit();
     try conn.deinit();
-}
-
-pub fn queryInfo(self: *Self) !QueryInfo {
-    var param_count: u32 = 0;
-
-    try e.check(
-        self.conn.oci_err_handle,
-        c.OCIAttrGet(
-            self.oci_stmt,
-            c.OCI_HTYPE_STMT,
-            &param_count,
-            null,
-            c.OCI_ATTR_PARAM_COUNT,
-            self.conn.oci_err_handle,
-        ),
-    );
-
-    var qi = try QueryInfo.init(self.allocator, param_count);
-
-    for (0..param_count) |i| {
-        var param_handle: ?*c.OCIParam = null;
-        try e.check(
-            self.oci_err_handle,
-            c.OCIParamGet(
-                self.oci_stmt,
-                c.OCI_HTYPE_STMT,
-                self.oci_err_handle,
-                @ptrCast(&param_handle),
-                @intCast(i + 1),
-            ),
-        );
-
-        var col_name: ?[*:0]u8 = null;
-        var col_name_len: u32 = 0;
-        try e.check(
-            self.oci_err_handle,
-            c.OCIAttrGet(
-                param_handle,
-                c.OCI_DTYPE_PARAM,
-                @ptrCast(&col_name),
-                @ptrCast(&col_name_len),
-                c.OCI_ATTR_NAME,
-                self.oci_err_handle,
-            ),
-        );
-
-        var oracle_type: c_int = 0;
-        try e.check(
-            self.oci_err_handle,
-            c.OCIAttrGet(
-                param_handle,
-                c.OCI_DTYPE_PARAM,
-                @ptrCast(&oracle_type),
-                null,
-                c.OCI_ATTR_DATA_TYPE,
-                self.oci_err_handle,
-            ),
-        );
-
-        try qi.variables.append(.{
-            .name = std.mem.sliceTo(col_name.?, 0),
-            .type_info = .{
-                .oracle_type = oracle_type,
-            },
-        });
-
-        if (c.OCIDescriptorFree(param_handle, c.OCI_DTYPE_PARAM) < 0) {
-            std.debug.print("OCIDescriptorFree failed.\n", .{});
-            return error.OCIDescriptorFreeFailed;
-        }
-    }
-
-    return qi;
-}
-test "Statement.queryInfo" {
-    const allocator = std.testing.allocator;
-    var conn = try Connection.init("localhost/ORCLPDB1", "demo", "demo");
-    var stmt = try Self.init(allocator, &conn);
-    try stmt.prepare("SELECT 1 as a1, 'hello' as B1  FROM DUAL");
-    try stmt.describe();
-    var qi = try stmt.queryInfo();
-    defer qi.deinit();
-    try std.testing.expect(qi.column_count == 2);
-    try std.testing.expectEqualStrings(qi.variableName(0), "A1");
-    try std.testing.expectEqual(qi.variableTypeInfo(0).oracle_type, c.SQLT_NUM);
-    try std.testing.expectEqualStrings((qi.variableName(1)), "B1");
 }
