@@ -129,12 +129,9 @@ test "ResultSet.getMetadata" {
 }
 
 // index starts at 1
-pub fn getValue(self: *Self, index: u32) !p.Value {
-    const md = try self.getMetadata();
-
-    const column_type = md.getColumnType(index);
-    const column_sub_type = md.getColumnSubType(index);
-
+// will be used for faster access to values otherwise
+// for each value we need some metadata access overhead.
+fn getValue2(self: *Self, index: u32, column_type: c_uint, column_sub_type: c_uint) !p.Value {
     switch (column_type) {
         oci.OCI_CDT_NUMERIC => switch (column_sub_type) {
             oci.OCI_NUM_DOUBLE, oci.OCI_NUM_FLOAT, oci.OCI_NUM_NUMBER => {
@@ -194,6 +191,14 @@ pub fn getValue(self: *Self, index: u32) !p.Value {
         },
         else => unreachable,
     }
+}
+
+// index starts at 1
+pub fn getValue(self: *Self, index: u32) !p.Value {
+    const md = try self.getMetadata();
+    const column_type = md.getColumnType(index);
+    const column_sub_type = md.getColumnSubType(index);
+    return self.getValue2(index, column_type, column_sub_type);
 }
 test "ResultSet.getValue" {
     const allocator = std.testing.allocator;
