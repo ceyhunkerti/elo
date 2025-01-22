@@ -165,7 +165,7 @@ fn getValue2(self: *Self, index: u32, column_type: c_uint, column_sub_type: c_ui
         },
         oci.OCI_CDT_TIMESTAMP => {
             const ots = oci.OCI_GetTimestamp(self.oci_result_set, index);
-            if (ots == null) return error.Fail;
+            if (ots == null) return .{ .TimeStamp = null };
 
             var year: c_int = undefined;
             var month: c_int = undefined;
@@ -178,19 +178,45 @@ fn getValue2(self: *Self, index: u32, column_type: c_uint, column_sub_type: c_ui
             if (oci.OCI_TimestampGetDateTime(ots, &year, &month, &day, &hour, &min, &sec, &fsec) != oci.TRUE) {
                 return error.Fail;
             }
-            // todo tz
-            return .{ .TimeStamp = .{
-                .year = @intCast(year),
-                .month = @intCast(month),
-                .day = @intCast(day),
-                .hour = @intCast(hour),
-                .minute = @intCast(min),
-                .second = @intCast(sec),
-                .nanosecond = @intCast(fsec),
-            } };
+
+            switch (column_sub_type) {
+                oci.OCI_TIMESTAMP => {
+                    return .{ .TimeStamp = .{
+                        .year = @intCast(year),
+                        .month = @intCast(month),
+                        .day = @intCast(day),
+                        .hour = @intCast(hour),
+                        .minute = @intCast(min),
+                        .second = @intCast(sec),
+                        .nanosecond = @intCast(fsec),
+                    } };
+                },
+                oci.OCI_TIMESTAMP_TZ, oci.OCI_TIMESTAMP_LTZ => {
+                    var tz_hour: c_int = undefined;
+                    var tz_min: c_int = undefined;
+                    if (oci.OCI_TimestampGetTimeZoneOffset(ots, &tz_hour, &tz_min) != oci.TRUE) {
+                        return error.Fail;
+                    }
+                    return .{ .TimeStamp = .{
+                        .year = @intCast(year),
+                        .month = @intCast(month),
+                        .day = @intCast(day),
+                        .hour = @intCast(hour),
+                        .minute = @intCast(min),
+                        .second = @intCast(sec),
+                        .nanosecond = @intCast(fsec),
+                        .tz_offset = .{
+                            .hour = @intCast(tz_hour),
+                            .minute = @intCast(tz_min),
+                        },
+                    } };
+                },
+                else => unreachable,
+            }
         },
         else => unreachable,
     }
+    unreachable;
 }
 
 // index starts at 1
@@ -215,7 +241,8 @@ test "ResultSet.getValue" {
     try conn.connect();
 
     var stmt = try conn.prepareStatement(
-        \\select 1 as a, 'hello' as b, to_date('2020-01-21', 'yyyy-mm-dd') as c
+        \\select 1 as a, 'hello' as b, to_date('2020-01-21', 'yyyy-mm-dd') as c,
+        \\ to_timestamp_tz('1999-12-01 11:00:00 -8:00','YYYY-MM-DD HH:MI:SS TZH:TZM') d
         \\from dual
     );
     defer stmt.deinit() catch unreachable;
@@ -236,4 +263,15 @@ test "ResultSet.getValue" {
     try std.testing.expectEqual(val_c.TimeStamp.?.year, 2020);
     try std.testing.expectEqual(val_c.TimeStamp.?.month, 1);
     try std.testing.expectEqual(val_c.TimeStamp.?.day, 21);
+
+    const val_d = try rs.getValue(4);
+    defer val_d.deinit(allocator);
+    try std.testing.expectEqual(val_d.TimeStamp.?.year, 1999);
+    try std.testing.expectEqual(val_d.TimeStamp.?.month, 12);
+    try std.testing.expectEqual(val_d.TimeStamp.?.day, 1);
+    try std.testing.expectEqual(val_d.TimeStamp.?.hour, 11);
+    try std.testing.expectEqual(val_d.TimeStamp.?.minute, 0);
+    try std.testing.expectEqual(val_d.TimeStamp.?.second, 0);
+    try std.testing.expectEqual(val_d.TimeStamp.?.tz_offset.hour, -8);
+    try std.testing.expectEqual(val_d.TimeStamp.?.tz_offset.minute, 0);
 }
