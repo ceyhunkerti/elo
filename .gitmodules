@@ -1,0 +1,3 @@
+[submodule "lib/oracle/ocilib"]
+	path = lib/oracle/ocilib
+	url = git@github.com:ceyhunkerti/ocilib.git
