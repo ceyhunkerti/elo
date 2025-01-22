@@ -1,10 +1,16 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const c = @import("../c.zig").c;
+const oci = @import("../c.zig").oci;
+const p = @import("../../../wire/proto.zig");
+const ot = @import("../types.zig");
+
 const Statement = @import("../Statement.zig");
 const Self = @This();
 
 allocator: Allocator = undefined,
+oci_column: ?*oci.OCI_Column = null,
+
 index: u32,
 name: []const u8 = undefined,
 nullable: bool = true,
@@ -15,6 +21,31 @@ length: u32 = 0,
 precision: ?u32 = null,
 scale: ?u32 = null,
 default: ?[]const u8 = null,
+
+pub fn init(allocator: Allocator, index: u32, oci_column: *oci.OCI_Column) Self {
+    return .{
+        .allocator = allocator,
+        .oci_column = oci_column,
+        .index = index,
+    };
+}
+
+pub fn getName(self: Self) []const u8 {
+    const name = oci.OCI_ColumnGetName(self.oci_column);
+    return std.mem.sliceTo(name, 0);
+}
+pub fn isNullable(self: Self) bool {
+    return oci.OCI_ColumnGetNullable(self.oci_column) == oci.TRUE;
+}
+pub fn getSqlType(self: Self) []const u8 {
+    return std.mem.sliceTo(oci.OCI_ColumnGetSQLType(self.oci_column), 0);
+}
+pub fn getType(self: Self) c_uint {
+    return oci.OCI_ColumnGetType(self.oci_column);
+}
+pub fn getSubType(self: Self) c_uint {
+    return oci.OCI_ColumnGetSubType(self.oci_column);
+}
 
 pub fn deinit(self: *Self) void {
     self.allocator.free(self.name);

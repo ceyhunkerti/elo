@@ -1,3 +1,7 @@
+pub const Connection2 = @import("Connection2.zig");
+pub const ResultSet = @import("ResultSet.zig");
+
+//
 pub const Connection = @import("Connection.zig");
 pub const Statement = @import("Statement.zig");
 pub const Reader = @import("io/Reader.zig");

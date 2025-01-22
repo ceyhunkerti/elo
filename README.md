@@ -6,6 +6,15 @@ Fast data transfer utility for ELT workflows.
 
 ## Development
 
+### Ocilib
+```sh
+sudo apt-get install automake
+
+./configure \
+    --with-oracle_headers_path=/path/to/instantclient_21_16/sdk/include \
+    --prefix=/path/to/elo/lib/oracle/ocilib/lib/
+```
+
 - `mv .env.dev .env`
 - Download oracle instant client from [here](https://www.oracle.com/database/technologies/instant-client/downloads.html)
 - Extract instant client to a path and adjust the `LD_LIBRARY_PATH` in `.env`
@@ -23,3 +32,6 @@ sudo apt install libaio1
 
 - Run the test containers with `docker compose up`
 - Run the tests with `source .env && zig build test`
+
+
+

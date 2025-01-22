@@ -48,6 +48,10 @@ pub fn build(b: *std.Build) void {
     });
     exe.linkLibC();
 
+    exe.addLibraryPath(b.path("lib/oracle/ocilib/lib/lib"));
+    exe.linkSystemLibrary("ocilib");
+    exe.addIncludePath(b.path("lib/oracle/ocilib/lib/include"));
+
     exe.addCSourceFile(.{
         .file = b.path("lib/oracle/odpi-5.4.1/embed/dpi.c"),
     });
@@ -93,6 +97,10 @@ pub fn build(b: *std.Build) void {
     exe_unit_tests.linkLibC();
     exe_unit_tests.linkSystemLibrary("libpq");
     exe_unit_tests.addIncludePath(.{ .cwd_relative = "/usr/include/postgresql" });
+
+    exe_unit_tests.addLibraryPath(b.path("lib/oracle/ocilib/lib/lib"));
+    exe_unit_tests.linkSystemLibrary("ocilib");
+    exe_unit_tests.addIncludePath(b.path("lib/oracle/ocilib/lib/include"));
 
     exe_unit_tests.addCSourceFile(.{
         .file = b.path("lib/oracle/odpi-5.4.1/embed/dpi.c"),
