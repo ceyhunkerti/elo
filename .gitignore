@@ -4,4 +4,5 @@
 deps
 zig-out
 
+lib/oracle/ocilib
 .uncommitted
