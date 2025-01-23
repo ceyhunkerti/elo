@@ -1,27 +1,20 @@
 const std = @import("std");
-const debug = std.debug;
-const Allocator = std.mem.Allocator;
 const testing = std.testing;
-const Context = @import("Context.zig");
-const t = @import("testing/testing.zig");
 const Statement = @import("Statement.zig");
 
-const c = @import("c.zig").c;
-// pub const Statement = @import("Statement.zig");
+const t = @import("testing/testing.zig");
+const oci = @import("c.zig").oci;
 
 const Self = @This();
 
 pub const ConnectionError = error{
     UnknownPrivilegeMode,
-
     FailedToCreateConnection,
     FailedToReleaseConnection,
     FailedToDestroyContext,
     FailedToInitializeConnCreateParams,
-
     FailedToCommit,
     FailedToRollback,
-
     FailedToCreateVariable,
 };
 
@@ -35,18 +28,19 @@ pub const Privilege = enum {
     SYSRAC,
     DEFAULT,
 
-    pub fn toDpi(self: Privilege) c.dpiAuthMode {
+    pub fn toOci(self: Privilege) c_uint {
         return switch (self) {
-            .SYSDBA => c.DPI_MODE_AUTH_SYSDBA,
-            .SYSOPER => c.DPI_MODE_AUTH_SYSOPER,
-            .SYSASM => c.DPI_MODE_AUTH_SYSASM,
-            .SYSBACKUP => c.DPI_MODE_AUTH_SYSBKP,
-            .SYSDG => c.DPI_MODE_AUTH_SYSDGD,
-            .SYSKM => c.DPI_MODE_AUTH_SYSKMT,
-            .SYSRAC => c.DPI_MODE_AUTH_SYSRAC,
-            .DEFAULT => c.DPI_MODE_AUTH_DEFAULT,
+            .SYSDBA => oci.OCI_SESSION_SYSDBA,
+            .SYSOPER => oci.OCI_SESSION_SYSOPER,
+            .SYSASM => oci.OCI_SESSION_SYSASM,
+            .SYSBACKUP => oci.OCI_SESSION_SYSBKP,
+            .SYSDG => oci.OCI_SESSION_SYSDGD,
+            .SYSKM => oci.OCI_SESSION_SYSKMT,
+            .SYSRAC => oci.OCI_SESSION_SYSRAC,
+            .DEFAULT => oci.OCI_SESSION_DEFAULT,
         };
     }
+
     pub fn fromString(s: ?[]const u8) !Privilege {
         if (s) |str| {
             inline for (@typeInfo(Privilege).Enum.fields) |field| {
@@ -61,138 +55,113 @@ pub const Privilege = enum {
     }
 };
 
-allocator: Allocator,
-dpi_conn: ?*c.dpiConn = null,
-context: Context = undefined,
+allocator: std.mem.Allocator,
+oci_conn: ?*oci.OCI_Connection = null,
 
+connection_string: []const u8 = "",
 username: []const u8 = "",
 password: []const u8 = "",
-connection_string: []const u8 = "",
 privilege: Privilege = .DEFAULT,
 
 pub fn init(
-    allocator: Allocator,
+    allocator: std.mem.Allocator,
+    connection_string: []const u8,
     username: []const u8,
     password: []const u8,
-    connection_string: []const u8,
     privilege: Privilege,
-) Self {
+) !Self {
+    if (oci.OCI_Initialize(null, null, oci.OCI_ENV_DEFAULT | oci.OCI_ENV_CONTEXT) != oci.TRUE) {
+        return error.Fail;
+    }
+
     return Self{
         .allocator = allocator,
+        .connection_string = connection_string,
         .username = username,
         .password = password,
-        .connection_string = connection_string,
         .privilege = privilege,
     };
 }
 pub fn deinit(self: *Self) !void {
-    if (self.dpi_conn != null) {
-        if (c.dpiConn_release(self.dpi_conn) < 0) {
-            return error.FailedToReleaseConnection;
-        }
+    if (self.oci_conn) |conn| {
+        _ = oci.OCI_ConnectionFree(conn);
     }
+    _ = oci.OCI_Cleanup();
 }
 
-fn createContext(self: *Self) !void {
-    self.context = Context{};
-    try self.context.create();
-}
-
-fn dpiConnCreateParams(self: *Self) !c.dpiConnCreateParams {
-    var params: c.dpiConnCreateParams = undefined;
-    if (c.dpiContext_initConnCreateParams(self.context.dpi_context, &params) < 0) {
-        return error.FailedToInitializeConnCreateParams;
+pub fn getLastError(self: Self) ![]const u8 {
+    const err: ?*oci.OCI_Error = oci.OCI_GetLastError();
+    if (err) |_| {
+        return try std.fmt.allocPrint(self.allocator, "OCI({d}): {s}", .{
+            oci.OCI_ErrorGetOCICode(err),
+            oci.OCI_ErrorGetString(err),
+        });
     }
-    params.authMode = self.privilege.toDpi();
-    return params;
+    return error.Fail;
 }
-
-pub fn errorMessage(self: *Self) []const u8 {
-    return self.context.errorMessage();
+pub fn printLastError(self: Self) !void {
+    const error_message = try self.getLastError();
+    defer self.allocator.free(error_message);
+    std.debug.print("\nLast Error: {s}\n", .{error_message});
 }
 
 pub fn connect(self: *Self) !void {
-    try self.createContext();
-    var create_params = try self.dpiConnCreateParams();
-
-    var dpi_conn: ?*c.dpiConn = null;
-    if (c.dpiConn_create(
-        self.context.dpi_context,
-        self.username.ptr,
-        @intCast(self.username.len),
-        self.password.ptr,
-        @intCast(self.password.len),
+    if (self.oci_conn) |conn| {
+        _ = oci.OCI_ConnectionFree(conn);
+    }
+    self.oci_conn = oci.OCI_ConnectionCreate(
         self.connection_string.ptr,
-        @intCast(self.connection_string.len),
-        null,
-        &create_params,
-        &dpi_conn,
-    ) < 0) {
-        debug.print("Failed to create connection with error: {s}\n", .{self.errorMessage()});
-        return error.FailedToCreateConnection;
-    }
+        self.username.ptr,
+        self.password.ptr,
+        self.privilege.toOci(),
+    );
 
-    if (dpi_conn == null) {
-        return error.FailedToCreateConnection;
+    if (self.oci_conn == null) {
+        try self.printLastError();
+        return error.FailedToConnect;
     }
-    self.dpi_conn = dpi_conn;
 }
-test "connect" {
-    var conn = try t.getTestConnection(testing.allocator);
+test "Connection.connect" {
+    const p = try t.ConnectionParams.init();
+
+    var conn = try Self.init(testing.allocator, p.connection_string, p.username, p.password, p.privilege);
+    defer conn.deinit() catch unreachable;
     try conn.connect();
 }
 
-pub fn createStatement(self: *Self) Statement {
-    return Statement.init(self.allocator, self);
+pub fn createStatement(self: *Self) !Statement {
+    var stmt = Statement.init(self.allocator, self);
+    try stmt.create();
+    return stmt;
+}
+test "Connection.createStatement" {
+    const p = try t.ConnectionParams.init();
+    var conn = try Self.init(testing.allocator, p.connection_string, p.username, p.password, p.privilege);
+    defer conn.deinit() catch unreachable;
+    try conn.connect();
+    _ = try conn.createStatement();
 }
 
 pub fn prepareStatement(self: *Self, sql: []const u8) !Statement {
-    var stmt = self.createStatement();
+    var stmt = try self.createStatement();
     try stmt.prepare(sql);
     return stmt;
 }
-
-pub fn execute(self: *Self, sql: []const u8) !u32 {
-    var stmt = try self.prepareStatement(sql);
-    return try stmt.execute();
+test "Connection.prepareStatement" {
+    const p = try t.ConnectionParams.init();
+    var conn = try Self.init(testing.allocator, p.connection_string, p.username, p.password, p.privilege);
+    defer conn.deinit() catch unreachable;
+    try conn.connect();
+    _ = try conn.prepareStatement("select 1 from dual");
 }
 
-pub fn commit(self: *Self) !void {
-    if (c.dpiConn_commit(self.dpi_conn) < 0) {
-        debug.print("Failed to commit with error: {s}\n", .{self.errorMessage()});
-        return error.FailedToCommit;
-    }
-}
-pub fn rollback(self: *Self) !void {
-    if (c.dpiConn_rollback(self.dpi_conn) < 0) {
-        return error.FailedToRollback;
-    }
-}
-
-pub fn newVariable(
-    self: Self,
-    dpi_oracle_type: c.dpiOracleTypeNum,
-    dpi_native_type: c.dpiNativeTypeNum,
-    max_array_size: u32,
-    size: u32,
-    size_is_bytes: bool,
-    is_array: bool,
-    obj_type: ?*c.dpiObjectType,
-    @"var": [*c]?*c.dpiVar,
-    data: [*c][*c]c.dpiData,
-) !void {
-    if (c.dpiConn_newVar(
-        self.dpi_conn,
-        dpi_oracle_type,
-        dpi_native_type,
-        max_array_size,
-        size,
-        if (size_is_bytes) 1 else 0,
-        if (is_array) 1 else 0,
-        obj_type,
-        @"var",
-        data,
-    ) < 0) {
-        return error.FailedToCreateVariable;
+pub fn commit(self: Self) !void {
+    if (self.oci_conn) |conn| {
+        if (oci.OCI_Commit(conn) != oci.TRUE) {
+            return error.Fail;
+        }
+    } else {
+        std.debug.print("Connection is not initialized\n", .{});
+        return error.Fail;
     }
 }

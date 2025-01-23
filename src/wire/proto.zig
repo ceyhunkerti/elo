@@ -147,7 +147,7 @@ pub const Record = struct {
         return self.values.capacity;
     }
 
-    pub fn item(self: Record, index: usize) Value {
+    pub fn get(self: Record, index: usize) Value {
         return self.values.items[index];
     }
 

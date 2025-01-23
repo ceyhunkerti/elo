@@ -25,18 +25,22 @@ pub fn init(allocator: std.mem.Allocator, result_set: *ResultSet) !Self {
     };
 }
 pub fn deinit(self: *Self) void {
+    for (self.columns) |*column| column.deinit();
     self.allocator.free(self.columns);
 }
 
+pub fn getColumn(self: Self, index: u32) Column {
+    return self.columns[index - 1];
+}
 pub fn getColumnName(self: Self, index: u32) []const u8 {
     return self.columns[index - 1].name;
 }
 pub fn getColumnSqlType(self: Self, index: u32) []const u8 {
-    return self.columns[index - 1].getSqlType();
+    return self.columns[index - 1].sql_type;
 }
 pub fn getColumnType(self: Self, index: u32) c_uint {
-    return self.columns[index - 1].getType();
+    return self.columns[index - 1].type;
 }
 pub fn getColumnSubType(self: Self, index: u32) c_uint {
-    return self.columns[index - 1].getSubType();
+    return self.columns[index - 1].sub_type;
 }

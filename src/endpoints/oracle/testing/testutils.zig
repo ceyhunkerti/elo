@@ -1,5 +1,5 @@
 const std = @import("std");
-const Connection = @import("../Connection2.zig");
+const Connection = @import("../Connection.zig");
 
 const Error = error{MissingTestEnvironmentVariable};
 

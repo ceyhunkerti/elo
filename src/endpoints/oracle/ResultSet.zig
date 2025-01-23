@@ -1,6 +1,6 @@
 const std = @import("std");
-const Statement = @import("Statement2.zig");
-const Connection = @import("Connection2.zig");
+const Statement = @import("Statement.zig");
+const Connection = @import("Connection.zig");
 const Column = @import("metadata/Column.zig");
 const ResultSetMetadata = @import("ResultSetMetadata.zig");
 
@@ -72,6 +72,7 @@ pub fn getColumn(self: Self, index: u32) !Column {
     }
     return error.Fail;
 }
+
 test "ResultSet.getColumn" {
     const params = try t.ConnectionParams.init();
     var conn = try Connection.init(
@@ -88,12 +89,13 @@ test "ResultSet.getColumn" {
     defer stmt.deinit() catch unreachable;
     try stmt.execute();
     const rs = try stmt.getResultSet();
-    const column = try rs.getColumn(1);
+    var column = try rs.getColumn(1);
+    defer column.deinit();
 
-    try std.testing.expectEqualStrings("A", column.getName());
-    try std.testing.expect(column.isNullable());
-    try std.testing.expectEqualStrings("NUMBER", column.getSqlType());
-    try std.testing.expectEqual(oci.OCI_CDT_NUMERIC, @as(c_int, @intCast(column.getType())));
+    try std.testing.expectEqualStrings("A", column.name);
+    try std.testing.expect(column.nullable);
+    try std.testing.expectEqualStrings("NUMBER", column.sql_type);
+    try std.testing.expectEqual(oci.OCI_CDT_NUMERIC, @as(c_int, @intCast(column.type)));
 }
 
 pub fn getMetadata(self: *Self) !ResultSetMetadata {
@@ -122,29 +124,27 @@ test "ResultSet.getMetadata" {
     defer rs.deinit();
     const md = try rs.getMetadata();
 
-    try std.testing.expectEqualStrings("A", md.columns[0].getName());
-    try std.testing.expect(md.columns[0].isNullable());
-    try std.testing.expectEqualStrings("NUMBER", md.columns[0].getSqlType());
-    try std.testing.expectEqual(oci.OCI_CDT_NUMERIC, @as(c_int, @intCast(md.columns[0].getType())));
+    try std.testing.expectEqualStrings("A", md.columns[0].name);
+    try std.testing.expect(md.columns[0].nullable);
+    try std.testing.expectEqualStrings("NUMBER", md.columns[0].sql_type);
+    try std.testing.expectEqual(oci.OCI_CDT_NUMERIC, @as(c_int, @intCast(md.columns[0].type)));
 }
 
 // index starts at 1
-// will be used for faster access to values otherwise
-// for each value we need some metadata access overhead.
-fn getValue2(self: *Self, index: u32, column_type: c_uint, column_sub_type: c_uint) !p.Value {
-    switch (column_type) {
-        oci.OCI_CDT_NUMERIC => switch (column_sub_type) {
+fn getValue(self: *Self, column: Column) !p.Value {
+    switch (column.type) {
+        oci.OCI_CDT_NUMERIC => switch (column.sub_type) {
             oci.OCI_NUM_DOUBLE, oci.OCI_NUM_FLOAT, oci.OCI_NUM_NUMBER => {
-                return .{ .Double = oci.OCI_GetDouble(self.oci_result_set, index) };
+                return .{ .Double = oci.OCI_GetDouble(self.oci_result_set, column.index) };
             },
-            else => return .{ .Int = oci.OCI_GetInt(self.oci_result_set, index) },
+            else => return .{ .Int = oci.OCI_GetInt(self.oci_result_set, column.index) },
         },
         oci.OCI_CDT_TEXT => {
-            const text = std.mem.sliceTo(oci.OCI_GetString(self.oci_result_set, index), 0);
+            const text = std.mem.sliceTo(oci.OCI_GetString(self.oci_result_set, column.index), 0);
             return .{ .String = try self.allocator.dupe(u8, text) };
         },
         oci.OCI_CDT_DATETIME => {
-            const ot = oci.OCI_GetDate(self.oci_result_set, index);
+            const ot = oci.OCI_GetDate(self.oci_result_set, column.index);
             if (ot == null) return error.Fail;
 
             var year: c_int = undefined;
@@ -164,7 +164,7 @@ fn getValue2(self: *Self, index: u32, column_type: c_uint, column_sub_type: c_ui
             } };
         },
         oci.OCI_CDT_TIMESTAMP => {
-            const ots = oci.OCI_GetTimestamp(self.oci_result_set, index);
+            const ots = oci.OCI_GetTimestamp(self.oci_result_set, column.index);
             if (ots == null) return .{ .TimeStamp = null };
 
             var year: c_int = undefined;
@@ -179,7 +179,7 @@ fn getValue2(self: *Self, index: u32, column_type: c_uint, column_sub_type: c_ui
                 return error.Fail;
             }
 
-            switch (column_sub_type) {
+            switch (column.sub_type) {
                 oci.OCI_TIMESTAMP => {
                     return .{ .TimeStamp = .{
                         .year = @intCast(year),
@@ -219,13 +219,6 @@ fn getValue2(self: *Self, index: u32, column_type: c_uint, column_sub_type: c_ui
     unreachable;
 }
 
-// index starts at 1
-pub fn getValue(self: *Self, index: u32) !p.Value {
-    const md = try self.getMetadata();
-    const column_type = md.getColumnType(index);
-    const column_sub_type = md.getColumnSubType(index);
-    return self.getValue2(index, column_type, column_sub_type);
-}
 test "ResultSet.getValue" {
     const allocator = std.testing.allocator;
 
@@ -251,20 +244,22 @@ test "ResultSet.getValue" {
     defer rs.deinit();
 
     try rs.fetchNext();
-    const val_a = try rs.getValue(1);
+    const md = try rs.getMetadata();
+
+    const val_a = try rs.getValue(md.getColumn(1));
     try std.testing.expectEqual(@as(f64, 1.0), val_a.Double);
 
-    const val_b = try rs.getValue(2);
+    const val_b = try rs.getValue(md.getColumn(2));
     defer val_b.deinit(allocator);
     try std.testing.expectEqualStrings("hello", val_b.String.?);
 
-    const val_c = try rs.getValue(3);
+    const val_c = try rs.getValue(md.getColumn(3));
     defer val_c.deinit(allocator);
     try std.testing.expectEqual(val_c.TimeStamp.?.year, 2020);
     try std.testing.expectEqual(val_c.TimeStamp.?.month, 1);
     try std.testing.expectEqual(val_c.TimeStamp.?.day, 21);
 
-    const val_d = try rs.getValue(4);
+    const val_d = try rs.getValue(md.getColumn(4));
     defer val_d.deinit(allocator);
     try std.testing.expectEqual(val_d.TimeStamp.?.year, 1999);
     try std.testing.expectEqual(val_d.TimeStamp.?.month, 12);
@@ -274,4 +269,46 @@ test "ResultSet.getValue" {
     try std.testing.expectEqual(val_d.TimeStamp.?.second, 0);
     try std.testing.expectEqual(val_d.TimeStamp.?.tz_offset.hour, -8);
     try std.testing.expectEqual(val_d.TimeStamp.?.tz_offset.minute, 0);
+}
+
+pub fn getRecord(self: *Self, columns: []Column) !p.Record {
+    var record = try p.Record.init(self.allocator, columns.len);
+    for (columns) |column| {
+        const val = try self.getValue(column);
+        try record.append(val);
+    }
+    return record;
+}
+test "ResultSet.getRecord" {
+    const allocator = std.testing.allocator;
+
+    const params = try t.ConnectionParams.init();
+    var conn = try Connection.init(
+        allocator,
+        params.connection_string,
+        params.username,
+        params.password,
+        params.privilege,
+    );
+    defer conn.deinit() catch unreachable;
+    try conn.connect();
+
+    var stmt = try conn.prepareStatement(
+        \\select 1 as a, 'hello' as b, to_date('2020-01-21', 'yyyy-mm-dd') as c,
+        \\ to_timestamp_tz('1999-12-01 11:00:00 -8:00','YYYY-MM-DD HH:MI:SS TZH:TZM') d
+        \\from dual
+    );
+    defer stmt.deinit() catch unreachable;
+    try stmt.execute();
+    var rs = try stmt.getResultSet();
+    defer rs.deinit();
+
+    const md = try rs.getMetadata();
+    try rs.fetchNext();
+    var record = try rs.getRecord(md.columns);
+    defer record.deinit(allocator);
+
+    try std.testing.expectEqual(@as(f64, 1.0), record.get(0).Double);
+    try std.testing.expectEqualStrings("hello", record.get(1).String.?);
+    try std.testing.expectEqual(record.get(2).TimeStamp.?.year, 2020);
 }
