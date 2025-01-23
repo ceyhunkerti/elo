@@ -31,7 +31,9 @@ pub fn create(self: *Self) !void {
 }
 
 pub fn prepare(self: Self, sql: []const u8) !void {
-    if (oci.OCI_Prepare(self.oci_stmt, sql.ptr) != oci.TRUE) {
+    const _sql = try std.fmt.allocPrintZ(self.allocator, "{s}", .{sql});
+    defer self.allocator.free(_sql);
+    if (oci.OCI_Prepare(self.oci_stmt, _sql.ptr) != oci.TRUE) {
         return error.Fail;
     }
 }

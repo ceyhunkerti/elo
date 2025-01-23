@@ -35,3 +35,14 @@ pub const ConnectionParams = struct {
         };
     }
 };
+
+pub fn getConnection(allocator: std.mem.Allocator) !Connection {
+    const params = try ConnectionParams.init();
+    return Connection.init(
+        allocator,
+        params.connection_string,
+        params.username,
+        params.password,
+        params.privilege,
+    );
+}

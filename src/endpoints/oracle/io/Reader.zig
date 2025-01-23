@@ -11,7 +11,7 @@ const t = @import("../testing/testing.zig");
 const Self = @This();
 
 allocator: std.mem.Allocator,
-conn: *Connection = undefined,
+conn: Connection = undefined,
 options: SourceOptions,
 
 pub fn init(allocator: std.mem.Allocator, options: SourceOptions) Self {
@@ -22,24 +22,28 @@ pub fn init(allocator: std.mem.Allocator, options: SourceOptions) Self {
     };
 }
 
-pub fn deinit(self: Self) !void {
+pub fn deinit(self: *Self) !void {
     try self.conn.deinit();
-    self.allocator.destroy(self.conn);
 }
 
-pub fn connect(self: Self) !void {
-    return try self.conn.connect();
+pub fn connect(self: *Self) !void {
+    try self.conn.connect();
 }
 
 pub fn run(self: *Self, wire: *w.Wire) !void {
     try self.read(wire);
 }
 
-pub fn read(self: Self, wire: *w.Wire) !void {
+pub fn read(self: *Self, wire: *w.Wire) !void {
     var stmt = try self.conn.prepareStatement(self.options.sql);
-    const column_count = try stmt.execute();
-    while (true) {
-        const record = try stmt.fetch(column_count) orelse break;
+    defer stmt.deinit() catch unreachable;
+
+    try stmt.execute();
+    var rs = try stmt.getResultSet();
+    defer rs.deinit();
+
+    var it = rs.iterator();
+    while (try it.next()) |record| {
         wire.put(try record.asMessage(self.allocator));
     }
     wire.put(w.Term(self.allocator));
@@ -80,8 +84,8 @@ test "Reader.read" {
             .Record => |record| {
                 message_count += 1;
                 try std.testing.expectEqual(record.len(), 2);
-                try std.testing.expectEqual(record.item(0).Double, 1);
-                try std.testing.expectEqual(record.item(1).Double, 2);
+                try std.testing.expectEqual(record.get(0).Double, 1);
+                try std.testing.expectEqual(record.get(1).Double, 2);
             },
             .Nil => {
                 term_received = true;

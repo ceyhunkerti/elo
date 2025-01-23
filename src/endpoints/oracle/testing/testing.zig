@@ -7,6 +7,7 @@ const Connection = @import("../Connection.zig");
 const tu = @import("./testutils.zig");
 
 pub const ConnectionParams = tu.ConnectionParams;
+pub const getConnection = tu.getConnection;
 
 pub fn schema() []const u8 {
     const p = getTestConnectionParams() catch unreachable;

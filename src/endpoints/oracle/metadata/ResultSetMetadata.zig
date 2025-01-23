@@ -1,6 +1,6 @@
 const std = @import("std");
-const ResultSet = @import("ResultSet.zig");
-const Column = @import("metadata/Column.zig");
+const ResultSet = @import("../ResultSet.zig");
+const Column = @import("Column.zig");
 
 const Self = @This();
 

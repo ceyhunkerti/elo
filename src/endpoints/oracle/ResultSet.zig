@@ -2,11 +2,34 @@ const std = @import("std");
 const Statement = @import("Statement.zig");
 const Connection = @import("Connection.zig");
 const Column = @import("metadata/Column.zig");
-const ResultSetMetadata = @import("ResultSetMetadata.zig");
+const ResultSetMetadata = @import("metadata/ResultSetMetadata.zig");
 
 const p = @import("../../wire/proto.zig");
 const oci = @import("c.zig").oci;
 const t = @import("testing/testing.zig");
+
+pub const RecordIterator = struct {
+    columns: []Column,
+    rs: *Self,
+    index: u32 = 0,
+
+    pub fn init(rs: *Self) RecordIterator {
+        const md = rs.getMetadata() catch unreachable;
+        return RecordIterator{
+            .columns = md.columns,
+            .rs = rs,
+        };
+    }
+
+    pub fn next(self: *RecordIterator) !?p.Record {
+        if (self.rs.fetchNext()) {
+            self.index += 1;
+            return try self.rs.getRecord(self.columns);
+        }
+
+        return null;
+    }
+};
 
 const Self = @This();
 
@@ -37,10 +60,11 @@ pub fn deinit(self: *Self) void {
     }
 }
 
-pub fn fetchNext(self: Self) !void {
-    if (oci.OCI_FetchNext(self.oci_result_set) != oci.TRUE) {
-        return error.Fail;
-    }
+pub fn iterator(self: *Self) RecordIterator {
+    return RecordIterator.init(self);
+}
+pub inline fn fetchNext(self: Self) bool {
+    return oci.OCI_FetchNext(self.oci_result_set) == oci.TRUE;
 }
 pub fn getColumnCount(self: Self) u32 {
     return oci.OCI_GetColumnCount(self.oci_result_set);
@@ -61,7 +85,8 @@ test "ResultSet.getColumnCount" {
     var stmt = try conn.prepareStatement("select 1 as a, 'hello' as b from dual");
     defer stmt.deinit() catch unreachable;
     try stmt.execute();
-    const rs = try stmt.getResultSet();
+    var rs = try stmt.getResultSet();
+    defer rs.deinit();
     try std.testing.expectEqual(rs.getColumnCount(), 2);
 }
 
@@ -88,7 +113,8 @@ test "ResultSet.getColumn" {
     var stmt = try conn.prepareStatement("select 1 as a, 'hello' as b from dual");
     defer stmt.deinit() catch unreachable;
     try stmt.execute();
-    const rs = try stmt.getResultSet();
+    var rs = try stmt.getResultSet();
+    defer rs.deinit();
     var column = try rs.getColumn(1);
     defer column.deinit();
 
@@ -131,7 +157,9 @@ test "ResultSet.getMetadata" {
 }
 
 // index starts at 1
-fn getValue(self: *Self, column: Column) !p.Value {
+inline fn getValue(self: *Self, column: Column) !p.Value {
+    // std.debug.print("\n name: {s} column.type: {d} column.sub_type: {d}\n", .{ column.name, column.type, column.sub_type });
+
     switch (column.type) {
         oci.OCI_CDT_NUMERIC => switch (column.sub_type) {
             oci.OCI_NUM_DOUBLE, oci.OCI_NUM_FLOAT, oci.OCI_NUM_NUMBER => {
@@ -243,7 +271,7 @@ test "ResultSet.getValue" {
     var rs = try stmt.getResultSet();
     defer rs.deinit();
 
-    try rs.fetchNext();
+    try std.testing.expect(rs.fetchNext());
     const md = try rs.getMetadata();
 
     const val_a = try rs.getValue(md.getColumn(1));
@@ -271,7 +299,7 @@ test "ResultSet.getValue" {
     try std.testing.expectEqual(val_d.TimeStamp.?.tz_offset.minute, 0);
 }
 
-pub fn getRecord(self: *Self, columns: []Column) !p.Record {
+pub inline fn getRecord(self: *Self, columns: []Column) !p.Record {
     var record = try p.Record.init(self.allocator, columns.len);
     for (columns) |column| {
         const val = try self.getValue(column);
@@ -304,7 +332,7 @@ test "ResultSet.getRecord" {
     defer rs.deinit();
 
     const md = try rs.getMetadata();
-    try rs.fetchNext();
+    try std.testing.expect(rs.fetchNext());
     var record = try rs.getRecord(md.columns);
     defer record.deinit(allocator);
 

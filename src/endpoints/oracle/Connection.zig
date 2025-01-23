@@ -16,6 +16,8 @@ pub const ConnectionError = error{
     FailedToCommit,
     FailedToRollback,
     FailedToCreateVariable,
+
+    Fail,
 };
 
 pub const Privilege = enum {
@@ -89,18 +91,18 @@ pub fn deinit(self: *Self) !void {
     _ = oci.OCI_Cleanup();
 }
 
-pub fn getLastError(self: Self) ![]const u8 {
+pub fn getLastError(self: Self) []const u8 {
     const err: ?*oci.OCI_Error = oci.OCI_GetLastError();
     if (err) |_| {
-        return try std.fmt.allocPrint(self.allocator, "OCI({d}): {s}", .{
+        return std.fmt.allocPrint(self.allocator, "OCI({d}): {s}", .{
             oci.OCI_ErrorGetOCICode(err),
             oci.OCI_ErrorGetString(err),
-        });
+        }) catch unreachable;
     }
-    return error.Fail;
+    return self.allocator.dupe(u8, "No error message captured") catch unreachable;
 }
-pub fn printLastError(self: Self) !void {
-    const error_message = try self.getLastError();
+pub fn printLastError(self: Self) void {
+    const error_message = self.getLastError();
     defer self.allocator.free(error_message);
     std.debug.print("\nLast Error: {s}\n", .{error_message});
 }
@@ -117,7 +119,7 @@ pub fn connect(self: *Self) !void {
     );
 
     if (self.oci_conn == null) {
-        try self.printLastError();
+        self.printLastError();
         return error.FailedToConnect;
     }
 }
@@ -153,6 +155,12 @@ test "Connection.prepareStatement" {
     defer conn.deinit() catch unreachable;
     try conn.connect();
     _ = try conn.prepareStatement("select 1 from dual");
+}
+
+pub fn execute(self: *Self, sql: []const u8) !void {
+    var stmt = try self.prepareStatement(sql);
+    defer stmt.deinit() catch unreachable;
+    try stmt.execute();
 }
 
 pub fn commit(self: Self) !void {

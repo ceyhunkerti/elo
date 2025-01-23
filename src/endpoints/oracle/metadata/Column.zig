@@ -1,9 +1,9 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const c = @import("../c.zig").c;
+
 const oci = @import("../c.zig").oci;
 const p = @import("../../../wire/proto.zig");
-const ot = @import("../types.zig");
 
 const Statement = @import("../Statement.zig");
 
@@ -13,7 +13,7 @@ allocator: Allocator = undefined,
 oci_column: ?*oci.OCI_Column = null,
 
 index: u32,
-name: []const u8 = undefined,
+name: []const u8,
 nullable: bool = true,
 type: u32 = 0,
 sub_type: u32 = 0,
@@ -44,12 +44,11 @@ pub fn deinit(self: *Self) void {
 }
 
 pub fn toString(self: Self) ![]const u8 {
-    var buffer: [512]u8 = undefined;
-    defer self.allocator.free(buffer);
-    return try std.fmt.allocPrint(self.allocator,
-        \\{s} {s}
-    , .{
-        self.name,
-        oci.OCI_ColumnGetFullSQLType(self.oci_column, @ptrCast(&buffer), 512),
-    });
+    var buffer: [512]u8 = std.mem.zeroes([512]u8);
+    defer self.allocator.free(&buffer);
+
+    if (oci.OCI_ColumnGetFullSQLType(self.oci_column, @ptrCast(&buffer), 512) != oci.TRUE) {
+        return error.Fail;
+    }
+    return try std.fmt.allocPrint(self.allocator, "{s} {s}", .{ self.name, buffer });
 }
