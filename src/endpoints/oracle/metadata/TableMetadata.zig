@@ -133,7 +133,10 @@ pub fn fetch(allocator: std.mem.Allocator, conn: *Connection, table_name: []cons
 }
 test "TableMetadata.fetch" {
     const allocator = std.testing.allocator;
-    const schema_dot_table = try std.fmt.allocPrint(allocator, "{s}.TEST_TABLE", .{t.schema()});
+
+    const tp = try t.ConnectionParams.init();
+
+    const schema_dot_table = try std.fmt.allocPrint(allocator, "{s}.TEST_TABLE", .{tp.username});
     defer allocator.free(schema_dot_table);
 
     const create_script = try std.fmt.allocPrint(allocator,
@@ -176,13 +179,7 @@ test "TableMetadata.fetch" {
 
     const col_str = try tmd.columns.?[0].toString();
     defer allocator.free(col_str);
-    try std.testing.expectEqualStrings(
-        \\Name: ID
-        \\OracleTypeNme: NUMBER
-        \\OracleTypeNum: 2010
-        \\NativeTypeNum: 3003
-        \\Nullable: false
-    , col_str);
+    try std.testing.expectEqualStrings("ID NUMBER", col_str);
 }
 
 pub fn insertQuery(self: Self, columns: ?[]const []const u8) ![]const u8 {
@@ -233,54 +230,52 @@ pub fn insertQuery(self: Self, columns: ?[]const []const u8) ![]const u8 {
     });
     return sql;
 }
-// test "TableMetadata.buildInsertQuery" {
-//     const allocator = std.testing.allocator;
-//     const schema_dot_table = try std.fmt.allocPrint(allocator, "{s}.TEST_TABLE", .{t.schema()});
+test "TableMetadata.buildInsertQuery" {
+    const allocator = std.testing.allocator;
 
-//     const create_script = try std.fmt.allocPrint(allocator,
-//         \\CREATE TABLE {s} (
-//         \\  ID NUMBER(10) NOT NULL,
-//         \\  NAME VARCHAR2(50) NOT NULL,
-//         \\  AGE NUMBER(3) NOT NULL,
-//         \\  BIRTH_DATE DATE NOT NULL,
-//         \\  IS_ACTIVE NUMBER(1) NOT NULL
-//         \\)
-//     , .{schema_dot_table});
-//     defer allocator.free(create_script);
+    const tp = try t.ConnectionParams.init();
+    const schema_dot_table = try std.fmt.allocPrint(allocator, "{s}.TEST_TABLE", .{tp.username});
+    defer allocator.free(schema_dot_table);
 
-//     var conn = try t.getTestConnection(allocator);
-//     try conn.connect();
+    const create_script = try std.fmt.allocPrint(allocator,
+        \\CREATE TABLE {s} (
+        \\  ID NUMBER(10) NOT NULL,
+        \\  NAME VARCHAR2(50) NOT NULL,
+        \\  AGE NUMBER(3) NOT NULL,
+        \\  BIRTH_DATE DATE NOT NULL,
+        \\  IS_ACTIVE NUMBER(1) NOT NULL
+        \\)
+    , .{schema_dot_table});
+    defer allocator.free(create_script);
 
-//     errdefer {
-//         conn.printLastError();
-//     }
+    var conn = try t.getConnection(allocator);
+    try conn.connect();
+    defer conn.deinit() catch unreachable;
 
-//     try utils.dropTableIfExists(&conn, schema_dot_table);
-//     _ = try conn.execute(create_script);
+    errdefer conn.printLastError();
 
-//     var tmd = try Self.fetch(allocator, &conn, schema_dot_table);
-//     defer {
-//         tmd.deinit();
-//     }
+    try utils.dropTableIfExists(&conn, schema_dot_table);
+    try conn.execute(create_script);
 
-//     const insert_query = try tmd.insertQuery(null);
-//     defer allocator.free(insert_query);
+    var tmd = try Self.fetch(allocator, &conn, schema_dot_table);
+    defer tmd.deinit();
 
-//     try std.testing.expectEqualStrings(
-//         insert_query,
-//         "INSERT INTO sys.TEST_TABLE (ID,NAME,AGE,BIRTH_DATE,IS_ACTIVE) VALUES (:1,:2,:3,:4,:5)",
-//     );
+    const insert_query = try tmd.insertQuery(null);
+    defer allocator.free(insert_query);
 
-//     const insert_query_2 = try tmd.insertQuery(&[_][]const u8{ "ID", "NAME" });
-//     defer allocator.free(insert_query_2);
+    try std.testing.expectEqualStrings(
+        insert_query,
+        "INSERT INTO sys.TEST_TABLE (ID,NAME,AGE,BIRTH_DATE,IS_ACTIVE) VALUES (:1,:2,:3,:4,:5)",
+    );
 
-//     try std.testing.expectEqualStrings(
-//         insert_query_2,
-//         "INSERT INTO sys.TEST_TABLE (ID,NAME) VALUES (:1,:2)",
-//     );
+    const insert_query_2 = try tmd.insertQuery(&[_][]const u8{ "ID", "NAME" });
+    defer allocator.free(insert_query_2);
 
-//     try conn.deinit();
-// }
+    try std.testing.expectEqualStrings(
+        insert_query_2,
+        "INSERT INTO sys.TEST_TABLE (ID,NAME) VALUES (:1,:2)",
+    );
+}
 
 pub fn columnCount(self: Self) usize {
     if (self.columns) |columns| return columns.len;

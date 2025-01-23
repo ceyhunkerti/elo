@@ -1,7 +1,5 @@
 const std = @import("std");
-const connection = @import("connection.zig");
-pub const getTestConnection = connection.getTestConnection;
-pub const getTestConnectionParams = connection.getTestConnectionParams;
+
 const utils = @import("../utils.zig");
 const Connection = @import("../Connection.zig");
 const tu = @import("./testutils.zig");
@@ -9,12 +7,9 @@ const tu = @import("./testutils.zig");
 pub const ConnectionParams = tu.ConnectionParams;
 pub const getConnection = tu.getConnection;
 
-pub fn schema() []const u8 {
-    const p = getTestConnectionParams() catch unreachable;
-    return p.username;
-}
-
 pub fn createTestTable(allocator: std.mem.Allocator, conn: *Connection, args: ?struct { schema_dot_table: ?[]const u8, create_script: ?[]const u8 }) !void {
+    const cp = try ConnectionParams.init();
+
     errdefer {
         std.debug.print("Error: {s}\n", .{conn.errorMessage()});
     }
@@ -25,7 +20,7 @@ pub fn createTestTable(allocator: std.mem.Allocator, conn: *Connection, args: ?s
         if (a.schema_dot_table) |sdt| {
             schema_dot_table = sdt;
         } else {
-            schema_dot_table = try std.fmt.allocPrint(allocator, "{s}.TEST_TABLE", .{schema()});
+            schema_dot_table = try std.fmt.allocPrint(allocator, "{s}.TEST_TABLE", .{cp.username});
             defer allocator.free(schema_dot_table);
         }
         if (a.create_script) |script| {
@@ -47,7 +42,7 @@ pub fn createTestTable(allocator: std.mem.Allocator, conn: *Connection, args: ?s
         return;
     }
 
-    const schema_dot_table = try std.fmt.allocPrint(allocator, "{s}.TEST_TABLE", .{schema()});
+    const schema_dot_table = try std.fmt.allocPrint(allocator, "{s}.TEST_TABLE", .{cp.username});
     defer allocator.free(schema_dot_table);
     const create_script = try std.fmt.allocPrint(allocator,
         \\CREATE TABLE {s} (
@@ -69,18 +64,20 @@ pub fn isTestTableExist(
     conn: *Connection,
     args: ?struct { schema_dot_table: ?[]const u8 },
 ) !bool {
+    const cp = try ConnectionParams.init();
+
     if (args) |a| {
         var schema_dot_table: []const u8 = undefined;
         if (a.schema_dot_table) |sdt| {
             schema_dot_table = sdt;
         } else {
-            schema_dot_table = try std.fmt.allocPrint(allocator, "{s}.TEST_TABLE", .{schema()});
+            schema_dot_table = try std.fmt.allocPrint(allocator, "{s}.TEST_TABLE", .{cp.username});
             defer allocator.free(schema_dot_table);
         }
         return utils.isTableExist(conn, schema_dot_table);
     }
 
-    const schema_dot_table = try std.fmt.allocPrint(allocator, "{s}.TEST_TABLE", .{schema()});
+    const schema_dot_table = try std.fmt.allocPrint(allocator, "{s}.TEST_TABLE", .{cp.username});
     defer allocator.free(schema_dot_table);
     return utils.isTableExist(conn, schema_dot_table);
 }
@@ -100,12 +97,14 @@ pub fn createTestTableIfNotExists(
 }
 
 pub fn dropTestTableIfExist(conn: *Connection, args: ?struct { schema_dot_table: ?[]const u8 }) !void {
+    const cp = try ConnectionParams.init();
+
     if (args) |a| {
         var schema_dot_table: []const u8 = undefined;
         if (a.schema_dot_table) |sdt| {
             schema_dot_table = sdt;
         } else {
-            schema_dot_table = try std.fmt.allocPrint(std.heap.page_allocator, "{s}.TEST_TABLE", .{schema()});
+            schema_dot_table = try std.fmt.allocPrint(std.heap.page_allocator, "{s}.TEST_TABLE", .{cp.username});
         }
         try utils.dropTableIfExists(conn, schema_dot_table);
         return;

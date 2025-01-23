@@ -52,7 +52,7 @@ pub fn read(self: *Self, wire: *w.Wire) !void {
 test "Reader.read" {
     const allocator = std.testing.allocator;
 
-    const tp = try t.getTestConnectionParams();
+    const tp = try t.ConnectionParams.init();
     const options = SourceOptions{
         .connection = .{
             .connection_string = tp.connection_string,

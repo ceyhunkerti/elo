@@ -44,11 +44,12 @@ pub fn deinit(self: *Self) void {
 }
 
 pub fn toString(self: Self) ![]const u8 {
-    var buffer: [512]u8 = std.mem.zeroes([512]u8);
-    defer self.allocator.free(&buffer);
-
-    if (oci.OCI_ColumnGetFullSQLType(self.oci_column, @ptrCast(&buffer), 512) != oci.TRUE) {
-        return error.Fail;
+    if (self.oci_column) |oci_column| {
+        var buffer: [512:0]u8 = std.mem.zeroes([512:0]u8);
+        if (oci.OCI_ColumnGetFullSQLType(oci_column, @ptrCast(&buffer), 512) != oci.TRUE) {
+            return error.Fail;
+        }
+        return try std.fmt.allocPrint(self.allocator, "{s} {s}", .{ self.name, buffer });
     }
-    return try std.fmt.allocPrint(self.allocator, "{s} {s}", .{ self.name, buffer });
+    return std.fmt.allocPrint(self.allocator, "{s} {s}", .{ self.name, self.sql_type });
 }
