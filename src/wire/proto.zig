@@ -1,11 +1,25 @@
 const std = @import("std");
-const zdt = @import("zdt");
-const StringHashMap = std.StringHashMap;
 const w = @import("wire.zig");
 const M = @import("M.zig");
 
+const StringHashMap = std.StringHashMap;
+
 const Error = error{
     RecordFieldCapacityExceeded,
+};
+
+pub const Timestamp = struct {
+    year: i16,
+    month: u8,
+    day: u8,
+    hour: u8 = 0,
+    minute: u8 = 0,
+    second: u8 = 0,
+    nanosecond: u32 = 0,
+    tz_offset: struct {
+        hours: i8 = 0,
+        minutes: i8 = 0,
+    } = .{},
 };
 
 pub const FieldType = enum {
@@ -51,7 +65,7 @@ pub const Value = union(FieldType) {
     String: ?[]u8,
     Int: ?i64,
     Double: ?f64,
-    TimeStamp: ?zdt.Datetime,
+    TimeStamp: ?Timestamp,
     Number: ?f64,
     Boolean: ?bool,
     Array: ?[]Value,

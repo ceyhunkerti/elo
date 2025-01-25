@@ -11,7 +11,6 @@ const Mailbox = @import("../../../wire/Mailbox.zig");
 const TableMetadata = @import("../metadata/TableMetadata.zig");
 const t = @import("../testing/testing.zig");
 const utils = @import("../utils.zig");
-const zdt = @import("zdt");
 
 const Self = @This();
 
@@ -242,7 +241,16 @@ test "Writer.write" {
             .{ .Number = 1 }, //id
             .{ .String = try allocator.dupe(u8, "John") }, //name
             .{ .Number = 20 }, //age
-            .{ .TimeStamp = try zdt.Datetime.now(null) }, //birth_date
+            .{ .TimeStamp = .{
+                .year = 2000,
+                .month = 1,
+                .day = 1,
+                .hour = 0,
+                .minute = 0,
+                .second = 0,
+                .nanosecond = 0,
+                .tz_offset = .{ .hours = 0, .minutes = 0 },
+            } }, //birth_date
             .{ .Boolean = true }, //is_active
         },
     ) catch unreachable;
@@ -254,7 +262,16 @@ test "Writer.write" {
         .{ .Int = 2 }, //id
         .{ .String = try allocator.dupe(u8, "Jane") }, //name
         .{ .Int = 21 }, //age
-        .{ .TimeStamp = try zdt.Datetime.now(null) }, //birth_date
+        .{ .TimeStamp = .{
+            .year = 2000,
+            .month = 1,
+            .day = 1,
+            .hour = 0,
+            .minute = 0,
+            .second = 0,
+            .nanosecond = 0,
+            .tz_offset = .{ .hours = 0, .minutes = 0 },
+        } }, //birth_date
         .{ .Boolean = false }, //is_active
     }) catch unreachable;
     const m2 = r2.asMessage(allocator) catch unreachable;
@@ -265,7 +282,16 @@ test "Writer.write" {
         .{ .Int = 3 }, //id
         .{ .String = try allocator.dupe(u8, "Έ Ή") }, //name
         .{ .Int = 22 }, //age
-        .{ .TimeStamp = try zdt.Datetime.now(null) }, //birth_date
+        .{ .TimeStamp = .{
+            .year = 2000,
+            .month = 1,
+            .day = 1,
+            .hour = 0,
+            .minute = 0,
+            .second = 0,
+            .nanosecond = 0,
+            .tz_offset = .{ .hours = 0, .minutes = 0 },
+        } }, //birth_date
         .{ .Boolean = true }, //is_active
     }) catch unreachable;
     const m3 = record3.asMessage(allocator) catch unreachable;

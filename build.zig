@@ -35,11 +35,6 @@ pub fn build(b: *std.Build) void {
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
-    const zdt = b.dependency("zdt", .{
-        .target = target,
-        .optimize = optimize,
-    });
-
     const exe = b.addExecutable(.{
         .name = "elo",
         .root_source_file = b.path("src/main.zig"),
@@ -54,8 +49,6 @@ pub fn build(b: *std.Build) void {
     exe.addIncludePath(b.path("lib/oracle/odpi-5.4.1/include"));
     exe.linkSystemLibrary("libpq");
     exe.addIncludePath(.{ .cwd_relative = "/usr/include/postgresql" });
-
-    exe.root_module.addImport("zdt", zdt.module("zdt"));
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
@@ -98,7 +91,6 @@ pub fn build(b: *std.Build) void {
         .file = b.path("lib/oracle/odpi-5.4.1/embed/dpi.c"),
     });
     exe_unit_tests.addIncludePath(b.path("lib/oracle/odpi-5.4.1/include"));
-    exe_unit_tests.root_module.addImport("zdt", zdt.module("zdt"));
 
     const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
     run_exe_unit_tests.has_side_effects = true;
