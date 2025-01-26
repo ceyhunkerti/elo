@@ -91,8 +91,8 @@ pub fn fetch(allocator: std.mem.Allocator, conn: *Connection, table_name: []cons
             .index = std.math.lossyCast(u32, index.?),
             .name = try allocator.dupe(u8, name.?),
             .nullable = nullable,
-            .oracle_type_num = utils.toDpiOracleTypeNum(data_type.?),
-            .native_type_num = utils.toDpiNativeTypeNum(data_type.?),
+            .dpi_oracle_type_num = utils.toDpiOracleTypeNum(data_type.?),
+            .dpi_native_type_num = utils.toDpiNativeTypeNum(data_type.?),
             .oracle_type_name = if (data_type) |d| try allocator.dupe(u8, d) else null,
             .length = std.math.lossyCast(u32, length.?),
             .precision = if (precision) |precision_| std.math.lossyCast(u32, precision_) else null,
@@ -147,8 +147,8 @@ test "TableMetadata.fetch" {
     try std.testing.expectEqualStrings(tmd.columns.?[3].name, "BIRTH_DATE");
     try std.testing.expectEqualStrings(tmd.columns.?[4].name, "IS_ACTIVE");
 
-    try std.testing.expectEqual(tmd.columns.?[0].oracle_type_num, c.DPI_ORACLE_TYPE_NUMBER);
-    try std.testing.expectEqual(tmd.columns.?[0].native_type_num, c.DPI_NATIVE_TYPE_DOUBLE);
+    try std.testing.expectEqual(tmd.columns.?[0].dpi_oracle_type_num, c.DPI_ORACLE_TYPE_NUMBER);
+    try std.testing.expectEqual(tmd.columns.?[0].dpi_native_type_num, c.DPI_NATIVE_TYPE_DOUBLE);
     try std.testing.expectEqual(tmd.columns.?[0].length, 22);
     try std.testing.expectEqual(tmd.columns.?[0].precision, 10);
     try std.testing.expectEqual(tmd.columns.?[0].scale, 0);

@@ -88,8 +88,8 @@ pub fn initDpiVariables(self: *Self) !void {
 
     for (self.table_metadata.columns.?, 0..) |column, ci| {
         try self.conn.newVariable(
-            column.oracle_type_num,
-            column.native_type_num,
+            column.dpi_oracle_type_num,
+            column.dpi_native_type_num,
             self.options.batch_size,
             column.dpiVarSize(),
             false, // todo size_is_bytes
@@ -348,7 +348,7 @@ pub fn writeBatch(self: *Self, mb: *Mailbox) !void {
             switch (column) {
                 .Int => |val| {
                     if (val) |v| {
-                        switch (self.table_metadata.columns.?[ci].native_type_num) {
+                        switch (self.table_metadata.columns.?[ci].dpi_native_type_num) {
                             c.DPI_NATIVE_TYPE_INT64 => {
                                 self.dpi_variables.dpi_data_array.?[ci].?[ri].value.asInt64 = v;
                             },
@@ -372,9 +372,9 @@ pub fn writeBatch(self: *Self, mb: *Mailbox) !void {
                                     \\Column name: {s}
                                     \\Column oracle type num: {d}
                                 , .{
-                                    self.table_metadata.columns.?[ci].native_type_num,
+                                    self.table_metadata.columns.?[ci].dpi_native_type_num,
                                     self.table_metadata.columns.?[ci].name,
-                                    self.table_metadata.columns.?[ci].oracle_type_num,
+                                    self.table_metadata.columns.?[ci].dpi_oracle_type_num,
                                 });
                                 return error.TypeConversionNotSupported;
                             },
@@ -386,7 +386,7 @@ pub fn writeBatch(self: *Self, mb: *Mailbox) !void {
                 },
                 .Double, .Number => |val| {
                     if (val) |v| {
-                        switch (self.table_metadata.columns.?[ci].native_type_num) {
+                        switch (self.table_metadata.columns.?[ci].dpi_native_type_num) {
                             c.DPI_NATIVE_TYPE_INT64 => {
                                 self.dpi_variables.dpi_data_array.?[ci].?[ri].value.asInt64 = @intFromFloat(v);
                             },
@@ -407,9 +407,9 @@ pub fn writeBatch(self: *Self, mb: *Mailbox) !void {
                                     \\Column name: {s}
                                     \\Column oracle type num: {d}
                                 , .{
-                                    self.table_metadata.columns.?[ci].native_type_num,
+                                    self.table_metadata.columns.?[ci].dpi_native_type_num,
                                     self.table_metadata.columns.?[ci].name,
-                                    self.table_metadata.columns.?[ci].oracle_type_num,
+                                    self.table_metadata.columns.?[ci].dpi_oracle_type_num,
                                 });
                                 return error.TypeConversionNotSupported;
                             },
@@ -421,15 +421,15 @@ pub fn writeBatch(self: *Self, mb: *Mailbox) !void {
                 },
                 .String => |val| {
                     if (val) |v| {
-                        if (self.table_metadata.columns.?[ci].native_type_num != c.DPI_NATIVE_TYPE_BYTES) {
+                        if (self.table_metadata.columns.?[ci].dpi_native_type_num != c.DPI_NATIVE_TYPE_BYTES) {
                             std.debug.print(
                                 \\Type conversion from string to oracle native type num {d} is not supported
                                 \\Column name: {s}
                                 \\Column oracle type num: {d}
                             , .{
-                                self.table_metadata.columns.?[ci].native_type_num,
+                                self.table_metadata.columns.?[ci].dpi_native_type_num,
                                 self.table_metadata.columns.?[ci].name,
-                                self.table_metadata.columns.?[ci].oracle_type_num,
+                                self.table_metadata.columns.?[ci].dpi_oracle_type_num,
                             });
                             return error.TypeConversionNotSupported;
                         }
