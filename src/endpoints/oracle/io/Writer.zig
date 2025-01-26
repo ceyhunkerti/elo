@@ -121,7 +121,7 @@ pub fn prepare(self: *Self) !void {
     self.table_metadata = try TableMetadata.fetch(
         self.allocator,
         self.conn,
-        try self.allocator.dupe(u8, self.options.table),
+        self.options.table,
     );
 
     if (self.options.sql) |sql| {

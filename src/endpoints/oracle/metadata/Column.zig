@@ -7,6 +7,7 @@ const Self = @This();
 allocator: Allocator = undefined,
 index: u32,
 name: []const u8 = undefined,
+
 nullable: bool = true,
 oracle_type_num: c.dpiOracleTypeNum = undefined,
 native_type_num: c.dpiNativeTypeNum = undefined,

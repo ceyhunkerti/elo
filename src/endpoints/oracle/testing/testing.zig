@@ -1,7 +1,7 @@
 const std = @import("std");
-const connection = @import("connection.zig");
-pub const getTestConnection = connection.getTestConnection;
-pub const getTestConnectionParams = connection.getTestConnectionParams;
+const tc = @import("connection.zig");
+pub const getTestConnection = tc.getTestConnection;
+pub const getTestConnectionParams = tc.getTestConnectionParams;
 const utils = @import("../utils.zig");
 const Connection = @import("../Connection.zig");
 
@@ -52,9 +52,18 @@ pub const ConnectionParams = struct {
     }
 };
 
+pub fn connection(allocator: std.mem.Allocator) Connection {
+    const tp = ConnectionParams.initFromEnv(allocator) catch unreachable;
+    return tp.toConnection();
+}
+
 pub fn schema() []const u8 {
-    const p = getTestConnectionParams() catch unreachable;
+    const p = ConnectionParams.initFromEnv(std.testing.allocator) catch unreachable;
     return p.username;
+}
+
+pub fn connectionParams(allocator: std.mem.Allocator) !ConnectionParams {
+    return ConnectionParams.initFromEnv(allocator) catch unreachable;
 }
 
 pub fn createTestTable(allocator: std.mem.Allocator, conn: *Connection, args: ?struct { schema_dot_table: ?[]const u8, create_script: ?[]const u8 }) !void {
