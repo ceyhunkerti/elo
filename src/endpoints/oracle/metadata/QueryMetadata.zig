@@ -1,15 +1,14 @@
+const QueryMetadata = @This();
+
 const std = @import("std");
-const Allocator = std.mem.Allocator;
 const Statement = @import("../Statement.zig");
 const Column = @import("./Column.zig");
 
-const Self = @This();
-
-allocator: Allocator,
+allocator: std.mem.Allocator,
 stmt: *Statement,
 columns: []Column,
 
-pub fn init(allocator: Allocator, stmt: *Statement) !Self {
+pub fn init(allocator: std.mem.Allocator, stmt: *Statement) !QueryMetadata {
     const md = .{
         .allocator = allocator,
         .stmt = stmt,
@@ -22,7 +21,7 @@ pub fn init(allocator: Allocator, stmt: *Statement) !Self {
     return md;
 }
 
-pub fn columnNames(self: Self) ![]const []const u8 {
+pub fn columnNames(self: QueryMetadata) ![]const []const u8 {
     var names = try self.allocator.alloc([]const u8, self.columns.len);
     for (self.columns, 0..) |column, i| {
         names[i] = self.allocator.dupe(u8, column.name) catch unreachable;
@@ -30,6 +29,6 @@ pub fn columnNames(self: Self) ![]const []const u8 {
     return names;
 }
 
-pub fn columnCount(self: Self) u16 {
+pub fn columnCount(self: QueryMetadata) u16 {
     return @intCast(self.columns.len);
 }
