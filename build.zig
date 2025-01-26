@@ -12,6 +12,8 @@ comptime {
 // declaratively construct a build graph that will be executed by an external
 // runner.
 pub fn build(b: *std.Build) void {
+    const deps = buildpkg.Deps.init(b);
+
     // Standard target options allows the person running `zig build` to choose
     // what target to build for. Here we do not override the defaults, which
     // means any target is allowed, and the default is native. Other options
@@ -28,15 +30,11 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
-    exe.linkLibC();
 
-    exe.addCSourceFile(.{
-        .file = b.path("lib/oracle/odpi-5.4.1/embed/dpi.c"),
-    });
-    exe.addIncludePath(b.path("lib/oracle/odpi-5.4.1/include"));
-    exe.linkSystemLibrary("libpq");
-    exe.addIncludePath(.{ .cwd_relative = "/usr/include/postgresql" });
+    deps.setupOracle(exe);
+    deps.setupPostgres(exe);
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
@@ -66,23 +64,20 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 
-    const exe_unit_tests = b.addTest(.{
+    // tests
+    const tests = b.addTest(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
-    exe_unit_tests.linkLibC();
-    exe_unit_tests.linkSystemLibrary("libpq");
-    exe_unit_tests.addIncludePath(.{ .cwd_relative = "/usr/include/postgresql" });
 
-    exe_unit_tests.addCSourceFile(.{
-        .file = b.path("lib/oracle/odpi-5.4.1/embed/dpi.c"),
-    });
-    exe_unit_tests.addIncludePath(b.path("lib/oracle/odpi-5.4.1/include"));
+    deps.setupOracle(tests);
+    deps.setupPostgres(tests);
 
-    const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
-    run_exe_unit_tests.has_side_effects = true;
+    const run_tests = b.addRunArtifact(tests);
+    run_tests.has_side_effects = true;
 
     const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&run_exe_unit_tests.step);
+    test_step.dependOn(&run_tests.step);
 }
