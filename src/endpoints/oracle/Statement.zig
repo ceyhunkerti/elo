@@ -1,15 +1,16 @@
+const Statement = @This();
+
 const std = @import("std");
 
 const Connection = @import("Connection.zig");
 const c = @import("c.zig").c;
 const p = @import("../../wire/proto.zig");
+const e = @import("error.zig");
 const Record = p.Record;
 const Value = p.Value;
 
 const t = @import("testing/testing.zig");
 const checkError = @import("./utils.zig").checkError;
-
-const Self = @This();
 
 allocator: std.mem.Allocator = undefined,
 connection: *Connection = undefined,
@@ -22,47 +23,55 @@ pub const Error = error{
     StatementReleaseError,
 };
 
-pub fn init(allocator: std.mem.Allocator, connection: *Connection) Self {
+pub fn init(allocator: std.mem.Allocator, connection: *Connection) Statement {
     return .{
         .allocator = allocator,
         .connection = connection,
     };
 }
 
-pub fn release(self: *Self) !void {
-    try checkError(
+pub fn deinit(self: *Statement) void {
+    try self.release();
+}
+
+pub fn release(self: *Statement) !void {
+    try e.check(
         c.dpiStmt_release(self.dpi_stmt),
         error.StatementReleaseError,
+        &self.connection.context,
     );
     self.dpi_stmt = null;
 }
 
-pub fn prepare(self: *Self, sql: []const u8) !void {
-    try checkError(
+pub fn prepare(self: *Statement, sql: []const u8) !void {
+    try e.check(
         c.dpiConn_prepareStmt(self.connection.dpi_conn, 0, sql.ptr, @intCast(sql.len), null, 0, &self.dpi_stmt),
         error.PrepareStatementError,
+        &self.connection.context,
     );
 }
 
-pub fn setFetchSize(self: *Self, fetch_size: u32) !void {
+pub fn setFetchSize(self: *Statement, fetch_size: u32) !void {
     if (fetch_size > 0) {
-        try checkError(
+        try e.check(
             c.dpiStmt_setFetchArraySize(self.dpi_stmt, fetch_size),
             error.StatementConfigError,
+            &self.connection.context,
         );
     }
 }
 
-pub fn execute(self: *Self) !u32 {
+pub fn execute(self: *Statement) !u32 {
     var column_count: u32 = 0;
-    try checkError(
+    try e.check(
         c.dpiStmt_execute(self.dpi_stmt, c.DPI_MODE_EXEC_DEFAULT, &column_count),
         error.ExecuteStatementError,
+        &self.connection.context,
     );
     return column_count;
 }
 
-pub fn fetch(self: *Self, column_count: u32) !?Record {
+pub fn fetch(self: *Statement, column_count: u32) !?Record {
     var buffer_row_index: u32 = 0;
     var native_type_num: c.dpiNativeTypeNum = 0;
     var found: c_int = 0;
@@ -151,7 +160,7 @@ test "Statement.fetch" {
     try conn.deinit();
 }
 
-pub fn executeMany(self: *Self, num_iters: u32) !void {
+pub fn executeMany(self: *Statement, num_iters: u32) !void {
     try checkError(
         c.dpiStmt_executeMany(self.dpi_stmt, c.DPI_MODE_EXEC_DEFAULT, num_iters),
         error.ExecuteStatementError,

@@ -21,8 +21,14 @@ fn createWithParams(self: *Self) !void {
     }
 }
 
-pub fn errorMessage(self: *Self) []const u8 {
+pub fn errorMessage(self: *const Self) []const u8 {
     var err: c.dpiErrorInfo = undefined;
     c.dpiContext_getError(self.dpi_context, &err);
     return std.mem.span(err.message);
+}
+
+pub fn printError(self: *const Self) void {
+    var err: c.dpiErrorInfo = undefined;
+    c.dpiContext_getError(self.dpi_context, &err);
+    std.debug.print("Error: {d} {s}\n", .{ err.code, err.message });
 }
