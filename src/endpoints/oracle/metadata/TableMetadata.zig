@@ -109,36 +109,32 @@ pub fn fetch(allocator: std.mem.Allocator, conn: *Connection, table_name: []cons
 }
 test "TableMetadata.fetch" {
     const allocator = std.testing.allocator;
-    const schema = t.schema();
-    const schema_dot_table = try std.fmt.allocPrint(allocator, "{s}.TEST_TABLE_METADATA", .{schema});
-    defer allocator.free(schema_dot_table);
-
-    const create_script = try std.fmt.allocPrint(allocator,
-        \\CREATE TABLE {s} (
+    const table_name = "TEST_TABLE_METADATA_01";
+    const create_script =
+        \\CREATE TABLE {name} (
         \\  ID NUMBER(10) NOT NULL,
         \\  NAME VARCHAR2(50) NOT NULL,
         \\  AGE NUMBER(3) NOT NULL,
         \\  BIRTH_DATE DATE NOT NULL,
         \\  IS_ACTIVE NUMBER(1) NOT NULL
         \\)
-    , .{schema_dot_table});
-    defer allocator.free(create_script);
+    ;
 
     var conn = t.connection(allocator);
+    defer conn.deinit() catch unreachable;
     try conn.connect();
-
     errdefer {
         std.debug.print("Error: {s}\n", .{conn.errorMessage()});
     }
+    const tt = t.TestTable.init(allocator, &conn, table_name, create_script);
+    defer {
+        tt.dropIfExists() catch unreachable;
+        tt.deinit();
+    }
+    try tt.createIfNotExists();
 
-    try utils.dropTableIfExists(&conn, schema_dot_table);
-    _ = try conn.execute(create_script);
-
-    var tmd = try TableMetadata.fetch(allocator, &conn, schema_dot_table);
+    var tmd = try TableMetadata.fetch(allocator, &conn, tt.name());
     defer tmd.deinit();
-    try conn.deinit();
-
-    try utils.dropTableIfExists(&conn, schema_dot_table);
 
     try std.testing.expectEqual(tmd.columns.?.len, 5);
     try std.testing.expectEqualStrings(tmd.columns.?[0].name, "ID");
@@ -218,33 +214,31 @@ pub fn insertQuery(self: TableMetadata, columns: ?[]const []const u8) ![]const u
 }
 test "TableMetadata.buildInsertQuery" {
     const allocator = std.testing.allocator;
-    const schema = t.schema();
-    const schema_dot_table = try std.fmt.allocPrint(allocator, "{s}.TEST_BUILD_INS_QUERY", .{schema});
-    defer allocator.free(schema_dot_table);
-
-    const create_script = try std.fmt.allocPrint(allocator,
-        \\CREATE TABLE {s} (
+    const table_name = "TEST_BUILD_INS_QUERY";
+    const create_script =
+        \\CREATE TABLE {name} (
         \\  ID NUMBER(10) NOT NULL,
         \\  NAME VARCHAR2(50) NOT NULL,
         \\  AGE NUMBER(3) NOT NULL,
         \\  BIRTH_DATE DATE NOT NULL,
         \\  IS_ACTIVE NUMBER(1) NOT NULL
         \\)
-    , .{schema_dot_table});
-    defer allocator.free(create_script);
+    ;
 
     var conn = t.connection(allocator);
     defer conn.deinit() catch unreachable;
     try conn.connect();
-
     errdefer {
         std.debug.print("Error: {s}\n", .{conn.errorMessage()});
     }
+    const tt = t.TestTable.init(allocator, &conn, table_name, create_script);
+    defer {
+        tt.dropIfExists() catch unreachable;
+        tt.deinit();
+    }
+    try tt.createIfNotExists();
 
-    try utils.dropTableIfExists(&conn, schema_dot_table);
-    _ = try conn.execute(create_script);
-
-    var tmd = try TableMetadata.fetch(allocator, &conn, schema_dot_table);
+    var tmd = try TableMetadata.fetch(allocator, &conn, tt.tablename());
     defer tmd.deinit();
 
     const insert_query = try tmd.insertQuery(null);
@@ -252,10 +246,9 @@ test "TableMetadata.buildInsertQuery" {
     const q1 = try std.fmt.allocPrint(
         allocator,
         "INSERT INTO {s} (ID,NAME,AGE,BIRTH_DATE,IS_ACTIVE) VALUES (:1,:2,:3,:4,:5)",
-        .{
-            schema_dot_table,
-        },
+        .{tt.name()},
     );
+
     defer allocator.free(q1);
     try std.testing.expectEqualStrings(insert_query, q1);
 
@@ -264,7 +257,7 @@ test "TableMetadata.buildInsertQuery" {
     const q2 = try std.fmt.allocPrint(
         allocator,
         "INSERT INTO {s} (ID,NAME) VALUES (:1,:2)",
-        .{schema_dot_table},
+        .{tt.name()},
     );
     defer allocator.free(q2);
     try std.testing.expectEqualStrings(insert_query_2, q2);

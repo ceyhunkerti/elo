@@ -104,7 +104,7 @@ fn dpiConnCreateParams(self: *Connection) !c.dpiConnCreateParams {
     return params;
 }
 
-pub fn errorMessage(self: *Connection) []const u8 {
+pub fn errorMessage(self: Connection) []const u8 {
     return self.context.errorMessage();
 }
 
@@ -156,13 +156,13 @@ pub fn execute(self: *Connection, sql: []const u8) !u32 {
     return try stmt.execute();
 }
 
-pub fn commit(self: *Connection) !void {
+pub fn commit(self: Connection) !void {
     if (c.dpiConn_commit(self.dpi_conn) < 0) {
         std.debug.print("Failed to commit with error: {s}\n", .{self.errorMessage()});
         return error.FailedToCommit;
     }
 }
-pub fn rollback(self: *Connection) !void {
+pub fn rollback(self: Connection) !void {
     if (c.dpiConn_rollback(self.dpi_conn) < 0) {
         return error.FailedToRollback;
     }

@@ -1,18 +1,17 @@
-const c = @import("../c.zig").c;
+const Writer = @This();
+
 const std = @import("std");
 const Connection = @import("../Connection.zig");
 const Statement = @import("../Statement.zig");
 const SinkOptions = @import("../options.zig").SinkOptions;
+const Mailbox = @import("../../../wire/Mailbox.zig");
+const TableMetadata = @import("../metadata/TableMetadata.zig");
 
+const utils = @import("../utils.zig");
+const c = @import("../c.zig").c;
 const w = @import("../../../wire/wire.zig");
 const p = @import("../../../wire/proto.zig");
-const Mailbox = @import("../../../wire/Mailbox.zig");
-
-const TableMetadata = @import("../metadata/TableMetadata.zig");
 const t = @import("../testing/testing.zig");
-const utils = @import("../utils.zig");
-
-const Self = @This();
 
 allocator: std.mem.Allocator,
 conn: *Connection = undefined,
@@ -32,7 +31,7 @@ const Error = error{
     TypeConversionNotSupported,
 };
 
-pub fn init(allocator: std.mem.Allocator, options: SinkOptions) Self {
+pub fn init(allocator: std.mem.Allocator, options: SinkOptions) Writer {
     return .{
         .allocator = allocator,
         .options = options,
@@ -40,7 +39,7 @@ pub fn init(allocator: std.mem.Allocator, options: SinkOptions) Self {
     };
 }
 
-pub fn deinit(self: Self) !void {
+pub fn deinit(self: Writer) !void {
     try self.conn.deinit();
     self.allocator.destroy(self.conn);
     self.table_metadata.deinit();
@@ -50,12 +49,12 @@ pub fn deinit(self: Self) !void {
     if (self.dpi_variables.dpi_data_array) |arr| self.allocator.free(arr);
 }
 
-pub fn connect(self: Self) !void {
+pub fn connect(self: Writer) !void {
     return try self.conn.connect();
 }
 
 test "Writer" {
-    const tp = try t.getTestConnectionParams();
+    const tp = try t.connectionParams(std.testing.allocator);
     const options = SinkOptions{
         .connection = .{
             .connection_string = tp.connection_string,
@@ -66,12 +65,12 @@ test "Writer" {
         .table = "TEST_TABLE",
         .mode = .Truncate,
     };
-    var writer = Self.init(std.testing.allocator, options);
+    var writer = Writer.init(std.testing.allocator, options);
     try writer.connect();
     try writer.deinit();
 }
 
-pub fn clearDpiVariables(self: Self) !void {
+pub fn clearDpiVariables(self: Writer) !void {
     if (self.dpi_variables.dpi_var_array) |arr| for (arr) |var_| {
         if (var_) |v| {
             if (c.dpiVar_release(v) > 0) {
@@ -82,7 +81,7 @@ pub fn clearDpiVariables(self: Self) !void {
     };
 }
 
-pub fn initDpiVariables(self: *Self) !void {
+pub fn initDpiVariables(self: *Writer) !void {
     self.dpi_variables.dpi_var_array = try self.allocator.alloc(?*c.dpiVar, self.table_metadata.columnCount());
     self.dpi_variables.dpi_data_array = try self.allocator.alloc(?[*c]c.dpiData, self.table_metadata.columnCount());
 
@@ -111,7 +110,7 @@ pub fn initDpiVariables(self: *Self) !void {
     }
 }
 
-pub fn prepare(self: *Self) !void {
+pub fn prepare(self: *Writer) !void {
     // prepare table
     switch (self.options.mode) {
         .Append => return,
@@ -138,8 +137,9 @@ pub fn prepare(self: *Self) !void {
 }
 test "Writer.[prepare, resetDpiVariables]" {
     const allocator = std.testing.allocator;
+    const table_name = "TEST_WRITER_01";
 
-    const tp = try t.getTestConnectionParams();
+    const tp = try t.connectionParams(allocator);
     const options = SinkOptions{
         .connection = .{
             .connection_string = tp.connection_string,
@@ -147,23 +147,26 @@ test "Writer.[prepare, resetDpiVariables]" {
             .password = tp.password,
             .privilege = tp.privilege,
         },
-        .table = "TEST_TABLE",
+        .table = table_name,
         .mode = .Truncate,
     };
-    var writer = Self.init(allocator, options);
+    var writer = Writer.init(allocator, options);
     try writer.connect();
 
-    try t.createTestTableIfNotExists(allocator, writer.conn, null);
+    const tt = t.TestTable.init(allocator, writer.conn, table_name, null);
+    try tt.createIfNotExists();
+    defer {
+        tt.dropIfExists() catch unreachable;
+        tt.deinit();
+        writer.deinit() catch unreachable;
+    }
 
     try writer.prepare();
-
-    try t.dropTestTableIfExist(writer.conn, null);
-    try writer.deinit();
 }
 
 test "Writer.write .Append" {}
 
-pub fn write(self: *Self, wire: *w.Wire) !void {
+pub fn write(self: *Writer, wire: *w.Wire) !void {
     var mb = try Mailbox.init(self.allocator, self.options.batch_size);
     defer mb.deinit();
 
@@ -195,11 +198,9 @@ pub fn write(self: *Self, wire: *w.Wire) !void {
 }
 test "Writer.write" {
     const allocator = std.testing.allocator;
+    const table_name = "TEST_WRITER_02";
+    const tp = try t.connectionParams(allocator);
 
-    const schema_dot_table = try std.fmt.allocPrint(allocator, "{s}.TEST_TABLE_WRITE_01", .{t.schema()});
-    defer allocator.free(schema_dot_table);
-
-    const tp = try t.getTestConnectionParams();
     const options = SinkOptions{
         .connection = .{
             .connection_string = tp.connection_string,
@@ -207,18 +208,18 @@ test "Writer.write" {
             .password = tp.password,
             .privilege = tp.privilege,
         },
-        .table = schema_dot_table,
+        .table = table_name,
         .mode = .Truncate,
         .batch_size = 2,
     };
-    var writer = Self.init(allocator, options);
+    var writer = Writer.init(allocator, options);
     try writer.connect();
 
-    try t.dropTestTableIfExist(writer.conn, .{ .schema_dot_table = schema_dot_table });
-    try t.createTestTableIfNotExists(allocator, writer.conn, .{
-        .schema_dot_table = schema_dot_table,
-        .create_script =
-        \\CREATE TABLE TEST_TABLE_WRITE_01 (
+    const tt = t.TestTable.init(
+        allocator,
+        writer.conn,
+        table_name,
+        \\CREATE TABLE {name} (
         \\    id NUMBER,
         \\    name VARCHAR2(10 char),
         \\    age NUMBER,
@@ -226,10 +227,15 @@ test "Writer.write" {
         \\    is_active NUMBER
         \\)
         ,
-    });
+    );
+    defer {
+        tt.dropIfExists() catch unreachable;
+        tt.deinit();
+        writer.deinit() catch unreachable;
+    }
+    try tt.createIfNotExists();
 
     try writer.prepare();
-
     try std.testing.expectEqual(5, writer.table_metadata.columnCount());
 
     var wire = w.Wire.init();
@@ -304,7 +310,13 @@ test "Writer.write" {
         std.debug.print("Error in writer.write with error: {s}\n", .{writer.conn.errorMessage()});
     }
 
-    const check_query = "SELECT id, name, age, birth_date, is_active FROM TEST_TABLE_WRITE_01 order by id";
+    const check_query = try std.fmt.allocPrint(
+        allocator,
+        "SELECT id, name, age, birth_date, is_active FROM {s} order by id",
+        .{table_name},
+    );
+    defer allocator.free(check_query);
+
     var stmt = writer.conn.prepareStatement(check_query) catch unreachable;
     const column_count = try stmt.execute();
     var record_count: usize = 0;
@@ -335,13 +347,9 @@ test "Writer.write" {
     }
 
     try std.testing.expectEqual(3, record_count);
-
-    try t.dropTestTableIfExist(writer.conn, .{ .schema_dot_table = schema_dot_table });
-
-    try writer.deinit();
 }
 
-pub fn writeBatch(self: *Self, mb: *Mailbox) !void {
+pub fn writeBatch(self: *Writer, mb: *Mailbox) !void {
     for (0..mb.inbox_index) |ri| {
         const record = mb.inbox[ri].*.data.Record;
         for (record.items(), 0..) |column, ci| {
@@ -477,15 +485,16 @@ pub fn writeBatch(self: *Self, mb: *Mailbox) !void {
     };
 }
 
-pub fn run(self: *Self, wire: *w.Wire) !void {
+pub fn run(self: *Writer, wire: *w.Wire) !void {
     try self.prepare();
     try self.write(wire);
 }
 
 test "batch-insert" {
     const allocator = std.testing.allocator;
+    const table_name = "TEST_BATCH_INSERT";
 
-    const tp = try t.getTestConnectionParams();
+    const tp = try t.connectionParams(allocator);
     const options = SinkOptions{
         .connection = .{
             .connection_string = tp.connection_string,
@@ -493,21 +502,27 @@ test "batch-insert" {
             .password = tp.password,
             .privilege = tp.privilege,
         },
-        .table = "SYS.TEST_TABLE_1",
+        .table = table_name,
         .mode = .Truncate,
         .batch_size = 2,
     };
-    var writer = Self.init(allocator, options);
+    var writer = Writer.init(allocator, options);
     try writer.connect();
 
     const create_script =
-        \\CREATE TABLE SYS.TEST_TABLE_1 (
+        \\CREATE TABLE {name} (
         \\    id NUMBER,
         \\    name VARCHAR2(10)
         \\)
     ;
-    try utils.dropTableIfExists(writer.conn, "SYS.TEST_TABLE_1");
-    try utils.executeCreateTable(writer.conn, create_script);
+    const tt = t.TestTable.init(allocator, writer.conn, table_name, create_script);
+    try tt.createIfNotExists();
+
+    defer {
+        tt.dropIfExists() catch unreachable;
+        tt.deinit();
+        writer.deinit() catch unreachable;
+    }
 
     var dpi_var_array: ?[]?*c.dpiVar = null;
     var dpi_data_array: ?[]?[*c]c.dpiData = null;
@@ -546,7 +561,9 @@ test "batch-insert" {
     ) < 0) {
         unreachable;
     }
-    const slq = "insert into SYS.TEST_TABLE_1 (id, name) values (:1, :2)";
+    const slq = try std.fmt.allocPrint(allocator, "insert into {s} (id, name) values (:1, :2)", .{table_name});
+    defer allocator.free(slq);
+
     writer.stmt = writer.conn.prepareStatement(slq) catch unreachable;
 
     if (c.dpiStmt_bindByPos(writer.stmt.dpi_stmt, 1, dpi_var_array.?[0]) < 0) {
@@ -571,6 +588,4 @@ test "batch-insert" {
 
     try writer.stmt.executeMany(1);
     try writer.conn.commit();
-
-    try writer.deinit();
 }

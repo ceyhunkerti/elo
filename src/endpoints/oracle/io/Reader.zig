@@ -1,3 +1,5 @@
+const Reader = @This();
+
 const std = @import("std");
 const Connection = @import("../Connection.zig");
 const SourceOptions = @import("../options.zig").SourceOptions;
@@ -8,13 +10,11 @@ const M = @import("../../../wire/M.zig");
 
 const t = @import("../testing/testing.zig");
 
-const Self = @This();
-
 allocator: std.mem.Allocator,
 conn: *Connection = undefined,
 options: SourceOptions,
 
-pub fn init(allocator: std.mem.Allocator, options: SourceOptions) Self {
+pub fn init(allocator: std.mem.Allocator, options: SourceOptions) Reader {
     return .{
         .allocator = allocator,
         .options = options,
@@ -22,20 +22,20 @@ pub fn init(allocator: std.mem.Allocator, options: SourceOptions) Self {
     };
 }
 
-pub fn deinit(self: Self) !void {
+pub fn deinit(self: Reader) !void {
     try self.conn.deinit();
     self.allocator.destroy(self.conn);
 }
 
-pub fn connect(self: Self) !void {
+pub fn connect(self: Reader) !void {
     return try self.conn.connect();
 }
 
-pub fn run(self: *Self, wire: *w.Wire) !void {
+pub fn run(self: *Reader, wire: *w.Wire) !void {
     try self.read(wire);
 }
 
-pub fn read(self: Self, wire: *w.Wire) !void {
+pub fn read(self: Reader, wire: *w.Wire) !void {
     var stmt = try self.conn.prepareStatement(self.options.sql);
     const column_count = try stmt.execute();
     while (true) {
@@ -48,7 +48,7 @@ pub fn read(self: Self, wire: *w.Wire) !void {
 test "Reader.read" {
     const allocator = std.testing.allocator;
 
-    const tp = try t.getTestConnectionParams();
+    const tp = try t.connectionParams(allocator);
     const options = SourceOptions{
         .connection = .{
             .connection_string = tp.connection_string,
@@ -60,7 +60,7 @@ test "Reader.read" {
         .sql = "select 1 as A, 2 as B from dual",
     };
 
-    var reader = Self.init(allocator, options);
+    var reader = Reader.init(allocator, options);
     try reader.connect();
     var wire = w.Wire.init();
     try reader.read(&wire);
