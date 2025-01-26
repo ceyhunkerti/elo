@@ -17,7 +17,9 @@ const u = @import("utils.zig");
 
 test "oracle to oracle" {
     const allocator = std.testing.allocator;
-    const tp = try t.getTestConnectionParams();
+    const target_table_name = "TEST_ORACLE_TO_ORACLE";
+
+    const tp = try t.connectionParams(allocator);
     const co = .{
         .connection_string = tp.connection_string,
         .username = tp.username,
@@ -55,31 +57,33 @@ test "oracle to oracle" {
 
     var reader = Reader.init(allocator, so);
     try reader.connect();
-
-    const target_table = try std.fmt.allocPrint(allocator, "{s}.ORACLE_TO_ORACLE_TEST", .{t.schema()});
-    defer allocator.free(target_table);
+    defer reader.deinit() catch unreachable;
 
     const to = o.SinkOptions{
         .connection = co,
-        .table = target_table,
+        .table = target_table_name,
         .mode = .Truncate,
         .batch_size = 200,
     };
     var writer = Writer.init(allocator, to);
     try writer.connect();
 
-    const create_sql = try std.fmt.allocPrint(
+    const tt = t.TestTable.init(
         allocator,
-        \\CREATE TABLE {s} (
+        writer.conn,
+        target_table_name,
+        \\CREATE TABLE {name} (
         \\  ID NUMBER NOT NULL,
         \\  NAME VARCHAR2(100)
         \\)
-    ,
-        .{target_table},
+        ,
     );
-    defer allocator.free(create_sql);
-    try u.dropTableIfExists(writer.conn, target_table);
-    try u.executeCreateTable(writer.conn, create_sql);
+    try tt.createIfNotExists();
+    defer {
+        tt.dropIfExists() catch unreachable;
+        tt.deinit();
+        writer.deinit() catch unreachable;
+    }
 
     const producer = struct {
         pub fn producerThread(reader_: *Reader, wire: *w.Wire) !void {
@@ -93,12 +97,7 @@ test "oracle to oracle" {
 
     pth.join();
 
-    const count = try u.count(writer.conn, target_table);
+    const count = try u.count(writer.conn, target_table_name);
 
     try std.testing.expectEqual(count, @as(f64, @floatFromInt(duals.items.len)));
-
-    try u.dropTableIfExists(writer.conn, target_table);
-
-    try reader.deinit();
-    try writer.deinit();
 }

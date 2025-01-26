@@ -1,36 +1,36 @@
-const std = @import("std");
+const ConnectionParams = @This();
 
-const c = @import("../c.zig").c;
+const std = @import("std");
 const Connection = @import("../Connection.zig");
 
-const TestConnectionError = error{MissingTestEnvironmentVariable};
+pub const Error = error{MissingTestEnvironmentVariable};
 
-pub const TestConnectionParams = struct {
-    username: []const u8,
-    password: []const u8,
-    connection_string: []const u8,
-    privilege: Connection.Privilege,
-};
+allocator: std.mem.Allocator,
+username: []const u8,
+password: []const u8,
+connection_string: []const u8,
+privilege: Connection.Privilege,
 
-pub fn getTestConnectionParams() !TestConnectionParams {
+pub fn initFromEnv(allocator: std.mem.Allocator) !ConnectionParams {
     const username = std.posix.getenv("ORACLE_TEST_USERNAME") orelse {
         std.debug.print("Missing ORACLE_TEST_USERNAME environment variable\n", .{});
-        return TestConnectionError.MissingTestEnvironmentVariable;
+        return error.MissingTestEnvironmentVariable;
     };
     const password = std.posix.getenv("ORACLE_TEST_PASSWORD") orelse {
         std.debug.print("Missing ORACLE_TEST_PASSWORD environment variable\n", .{});
-        return TestConnectionError.MissingTestEnvironmentVariable;
+        return error.MissingTestEnvironmentVariable;
     };
     const connection_string = std.posix.getenv("ORACLE_TEST_CONNECTION_STRING") orelse {
         std.debug.print("Missing ORACLE_TEST_CONNECTION_STRING environment variable\n", .{});
-        return TestConnectionError.MissingTestEnvironmentVariable;
+        return error.MissingTestEnvironmentVariable;
     };
     const auth_mode = std.posix.getenv("ORACLE_TEST_AUTH_MODE") orelse {
         std.debug.print("Missing ORACLE_TEST_AUTH_MODE environment variable\n", .{});
-        return TestConnectionError.MissingTestEnvironmentVariable;
+        return error.MissingTestEnvironmentVariable;
     };
 
-    return TestConnectionParams{
+    return ConnectionParams{
+        .allocator = allocator,
         .username = username,
         .password = password,
         .connection_string = connection_string,
@@ -38,13 +38,12 @@ pub fn getTestConnectionParams() !TestConnectionParams {
     };
 }
 
-pub fn getTestConnection(allocator: std.mem.Allocator) !Connection {
-    const params = try getTestConnectionParams();
+pub fn toConnection(self: ConnectionParams) Connection {
     return Connection.init(
-        allocator,
-        params.username,
-        params.password,
-        params.connection_string,
-        params.privilege,
+        self.allocator,
+        self.username,
+        self.password,
+        self.connection_string,
+        self.privilege,
     );
 }
