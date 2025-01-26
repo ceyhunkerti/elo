@@ -1,47 +1,30 @@
+const TableMetadata = @This();
+
 const std = @import("std");
-const Allocator = std.mem.Allocator;
 const Statement = @import("../Statement.zig");
 const Column = @import("./Column.zig");
 const Connection = @import("../Connection.zig");
-const p = @import("../../../wire/proto.zig");
 const utils = @import("../utils.zig");
+
+const shared = @import("../../shared.zig");
+const TableName = shared.TableName;
+
+const p = @import("../../../wire/proto.zig");
 const c = @import("../c.zig").c;
-
+const e = @import("../error.zig");
 const t = @import("../testing/testing.zig");
-const Self = @This();
 
-pub const Table = struct {
-    raw_name: []const u8,
-    schema: []const u8,
-    name: []const u8,
-
-    pub fn init(table_name: []const u8) Table {
-        var tokens = std.mem.split(u8, table_name, ".");
-        const schema_or_table = tokens.first();
-        const name = tokens.rest();
-
-        if (name.len == 0) {
-            return .{
-                .raw_name = table_name,
-                .schema = "",
-                .name = schema_or_table,
-            };
-        } else {
-            return .{
-                .raw_name = table_name,
-                .schema = schema_or_table,
-                .name = name,
-            };
-        }
-    }
+pub const Error = error{
+    FailedToGetObjectType,
+    FailedToGetObjectTypeInfo,
 };
 
-allocator: Allocator = undefined,
-table: Table = undefined,
+allocator: std.mem.Allocator = undefined,
+table: TableName = undefined,
 columns: ?[]Column = null,
 
-pub fn deinit(self: Self) void {
-    self.allocator.free(self.table.raw_name);
+pub fn deinit(self: TableMetadata) void {
+    self.table.deinit();
     if (self.columns) |columns| {
         for (columns) |*column| {
             column.deinit();
@@ -50,8 +33,8 @@ pub fn deinit(self: Self) void {
     }
 }
 
-pub fn fetch(allocator: Allocator, conn: *Connection, table_name: []const u8) !Self {
-    const table = Table.init(table_name);
+pub fn fetch(allocator: std.mem.Allocator, conn: *Connection, table_name: []const u8) !TableMetadata {
+    const table = try TableName.init(allocator, table_name, conn.username);
 
     const sql = try std.fmt.allocPrint(
         allocator,
@@ -68,11 +51,12 @@ pub fn fetch(allocator: Allocator, conn: *Connection, table_name: []const u8) !S
         \\where t.table_name = c.table_name and t.table_name = upper('{s}') and t.owner = upper('{s}')
     ,
         .{
-            table.name,
+            table.tablename,
             table.schema,
         },
     );
     defer allocator.free(sql);
+    // std.debug.print("SQL: {s}\n", .{sql});
 
     var stmt = try conn.prepareStatement(sql);
     const column_count = try stmt.execute();
@@ -125,7 +109,9 @@ pub fn fetch(allocator: Allocator, conn: *Connection, table_name: []const u8) !S
 }
 test "TableMetadata.fetch" {
     const allocator = std.testing.allocator;
-    const schema_dot_table = try std.fmt.allocPrint(allocator, "{s}.TEST_TABLE", .{t.schema()});
+    const schema = t.schema();
+    const schema_dot_table = try std.fmt.allocPrint(allocator, "{s}.TEST_TABLE_METADATA", .{schema});
+    defer allocator.free(schema_dot_table);
 
     const create_script = try std.fmt.allocPrint(allocator,
         \\CREATE TABLE {s} (
@@ -138,7 +124,7 @@ test "TableMetadata.fetch" {
     , .{schema_dot_table});
     defer allocator.free(create_script);
 
-    var conn = try t.getTestConnection(allocator);
+    var conn = t.connection(allocator);
     try conn.connect();
 
     errdefer {
@@ -148,10 +134,8 @@ test "TableMetadata.fetch" {
     try utils.dropTableIfExists(&conn, schema_dot_table);
     _ = try conn.execute(create_script);
 
-    var tmd = try Self.fetch(allocator, &conn, schema_dot_table);
-    defer {
-        tmd.deinit();
-    }
+    var tmd = try TableMetadata.fetch(allocator, &conn, schema_dot_table);
+    defer tmd.deinit();
     try conn.deinit();
 
     try utils.dropTableIfExists(&conn, schema_dot_table);
@@ -184,7 +168,7 @@ test "TableMetadata.fetch" {
     );
 }
 
-pub fn insertQuery(self: Self, columns: ?[]const []const u8) ![]const u8 {
+pub fn insertQuery(self: TableMetadata, columns: ?[]const []const u8) ![]const u8 {
     var column_names = std.ArrayList([]const u8).init(self.allocator);
     defer column_names.deinit();
 
@@ -226,7 +210,7 @@ pub fn insertQuery(self: Self, columns: ?[]const []const u8) ![]const u8 {
     const sql = try std.fmt.allocPrint(self.allocator,
         \\INSERT INTO {s} ({s}) VALUES ({s})
     , .{
-        self.table.raw_name,
+        self.table.name,
         columns_expression,
         bindings_expression,
     });
@@ -234,7 +218,9 @@ pub fn insertQuery(self: Self, columns: ?[]const []const u8) ![]const u8 {
 }
 test "TableMetadata.buildInsertQuery" {
     const allocator = std.testing.allocator;
-    const schema_dot_table = try std.fmt.allocPrint(allocator, "{s}.TEST_TABLE", .{t.schema()});
+    const schema = t.schema();
+    const schema_dot_table = try std.fmt.allocPrint(allocator, "{s}.TEST_BUILD_INS_QUERY", .{schema});
+    defer allocator.free(schema_dot_table);
 
     const create_script = try std.fmt.allocPrint(allocator,
         \\CREATE TABLE {s} (
@@ -247,7 +233,8 @@ test "TableMetadata.buildInsertQuery" {
     , .{schema_dot_table});
     defer allocator.free(create_script);
 
-    var conn = try t.getTestConnection(allocator);
+    var conn = t.connection(allocator);
+    defer conn.deinit() catch unreachable;
     try conn.connect();
 
     errdefer {
@@ -257,31 +244,33 @@ test "TableMetadata.buildInsertQuery" {
     try utils.dropTableIfExists(&conn, schema_dot_table);
     _ = try conn.execute(create_script);
 
-    var tmd = try Self.fetch(allocator, &conn, schema_dot_table);
-    defer {
-        tmd.deinit();
-    }
+    var tmd = try TableMetadata.fetch(allocator, &conn, schema_dot_table);
+    defer tmd.deinit();
 
     const insert_query = try tmd.insertQuery(null);
     defer allocator.free(insert_query);
-
-    try std.testing.expectEqualStrings(
-        insert_query,
-        "INSERT INTO sys.TEST_TABLE (ID,NAME,AGE,BIRTH_DATE,IS_ACTIVE) VALUES (:1,:2,:3,:4,:5)",
+    const q1 = try std.fmt.allocPrint(
+        allocator,
+        "INSERT INTO {s} (ID,NAME,AGE,BIRTH_DATE,IS_ACTIVE) VALUES (:1,:2,:3,:4,:5)",
+        .{
+            schema_dot_table,
+        },
     );
+    defer allocator.free(q1);
+    try std.testing.expectEqualStrings(insert_query, q1);
 
     const insert_query_2 = try tmd.insertQuery(&[_][]const u8{ "ID", "NAME" });
     defer allocator.free(insert_query_2);
-
-    try std.testing.expectEqualStrings(
-        insert_query_2,
-        "INSERT INTO sys.TEST_TABLE (ID,NAME) VALUES (:1,:2)",
+    const q2 = try std.fmt.allocPrint(
+        allocator,
+        "INSERT INTO {s} (ID,NAME) VALUES (:1,:2)",
+        .{schema_dot_table},
     );
-
-    try conn.deinit();
+    defer allocator.free(q2);
+    try std.testing.expectEqualStrings(insert_query_2, q2);
 }
 
-pub fn columnCount(self: Self) usize {
+pub fn columnCount(self: TableMetadata) usize {
     if (self.columns) |columns| return columns.len;
     return 0;
 }
