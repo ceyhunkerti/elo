@@ -1,20 +1,17 @@
 const Statement = @This();
 
 const std = @import("std");
-
 const Connection = @import("Connection.zig");
+
 const c = @import("c.zig").c;
 const p = @import("../../wire/proto.zig");
 const e = @import("error.zig");
-const Record = p.Record;
-const Value = p.Value;
-
 const t = @import("testing/testing.zig");
-const checkError = @import("./utils.zig").checkError;
 
 allocator: std.mem.Allocator = undefined,
-connection: *Connection = undefined,
 dpi_stmt: ?*c.dpiStmt = null,
+
+connection: *Connection = undefined,
 
 pub const Error = error{
     StatementConfigError,
@@ -30,16 +27,12 @@ pub fn init(allocator: std.mem.Allocator, connection: *Connection) Statement {
     };
 }
 
-pub fn deinit(self: *Statement) void {
+pub fn deinit(self: *Statement) !void {
     try self.release();
 }
 
 pub fn release(self: *Statement) !void {
-    try e.check(
-        c.dpiStmt_release(self.dpi_stmt),
-        error.StatementReleaseError,
-        &self.connection.context,
-    );
+    try e.check(c.dpiStmt_release(self.dpi_stmt), error.StatementReleaseError);
     self.dpi_stmt = null;
 }
 
@@ -47,7 +40,6 @@ pub fn prepare(self: *Statement, sql: []const u8) !void {
     try e.check(
         c.dpiConn_prepareStmt(self.connection.dpi_conn, 0, sql.ptr, @intCast(sql.len), null, 0, &self.dpi_stmt),
         error.PrepareStatementError,
-        &self.connection.context,
     );
 }
 
@@ -56,7 +48,6 @@ pub fn setFetchSize(self: *Statement, fetch_size: u32) !void {
         try e.check(
             c.dpiStmt_setFetchArraySize(self.dpi_stmt, fetch_size),
             error.StatementConfigError,
-            &self.connection.context,
         );
     }
 }
@@ -66,12 +57,11 @@ pub fn execute(self: *Statement) !u32 {
     try e.check(
         c.dpiStmt_execute(self.dpi_stmt, c.DPI_MODE_EXEC_DEFAULT, &column_count),
         error.ExecuteStatementError,
-        &self.connection.context,
     );
     return column_count;
 }
 
-pub fn fetch(self: *Statement, column_count: u32) !?Record {
+pub fn fetch(self: *Statement, column_count: u32) !?p.Record {
     var buffer_row_index: u32 = 0;
     var native_type_num: c.dpiNativeTypeNum = 0;
     var found: c_int = 0;
@@ -82,20 +72,20 @@ pub fn fetch(self: *Statement, column_count: u32) !?Record {
     if (found == 0) {
         return null;
     }
-    var record = try Record.init(self.allocator, column_count);
+    var record = try p.Record.init(self.allocator, column_count);
 
     for (1..column_count + 1) |i| {
         var data: ?*c.dpiData = undefined;
         if (c.dpiStmt_getQueryValue(self.dpi_stmt, @intCast(i), &native_type_num, &data) < 0) {
             return error.FetchStatementError;
         }
-        var value: Value = undefined;
+        var value: p.Value = undefined;
         switch (native_type_num) {
             c.DPI_NATIVE_TYPE_BYTES => {
                 value = .{
                     .String = if (data.?.isNull != 0) null else try self.allocator.dupe(
                         u8,
-                        data.?.value.asBytes.ptr[0..data.?.value.asBytes.length],
+                        std.mem.span(data.?.value.asBytes.ptr),
                     ),
                 };
             },
@@ -139,12 +129,15 @@ test "Statement.fetch" {
         \\1 as A, 2 as B, 'hello' as C, to_date('2020-01-01', 'yyyy-mm-dd') as D
         \\from dual
     ;
-    var conn = t.getTestConnection(allocator) catch unreachable;
+    const tp = try t.ConnectionParams.initFromEnv(allocator);
+    var conn = tp.toConnection();
     try conn.connect();
+    defer conn.deinit() catch unreachable;
 
     var stmt = try conn.prepareStatement(sql);
-    const record = try stmt.fetch(try stmt.execute());
+    defer stmt.deinit() catch unreachable;
 
+    const record = try stmt.fetch(try stmt.execute());
     try std.testing.expect(record != null);
     if (record) |r| {
         defer r.deinit(allocator);
@@ -156,12 +149,10 @@ test "Statement.fetch" {
         try std.testing.expectEqual(r.items()[3].TimeStamp.?.month, 1);
         try std.testing.expectEqual(r.items()[3].TimeStamp.?.year, 2020);
     }
-    try stmt.release();
-    try conn.deinit();
 }
 
 pub fn executeMany(self: *Statement, num_iters: u32) !void {
-    try checkError(
+    try e.check(
         c.dpiStmt_executeMany(self.dpi_stmt, c.DPI_MODE_EXEC_DEFAULT, num_iters),
         error.ExecuteStatementError,
     );

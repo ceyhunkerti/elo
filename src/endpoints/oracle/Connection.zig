@@ -1,15 +1,12 @@
+const Connection = @This();
+
 const std = @import("std");
-const debug = std.debug;
-const Allocator = std.mem.Allocator;
 const testing = std.testing;
 const Context = @import("Context.zig");
-const t = @import("testing/testing.zig");
 const Statement = @import("Statement.zig");
 
+const t = @import("testing/testing.zig");
 const c = @import("c.zig").c;
-// pub const Statement = @import("Statement.zig");
-
-const Self = @This();
 
 pub const ConnectionError = error{
     UnknownPrivilegeMode,
@@ -61,7 +58,7 @@ pub const Privilege = enum {
     }
 };
 
-allocator: Allocator,
+allocator: std.mem.Allocator,
 dpi_conn: ?*c.dpiConn = null,
 context: Context = undefined,
 
@@ -71,13 +68,13 @@ connection_string: []const u8 = "",
 privilege: Privilege = .DEFAULT,
 
 pub fn init(
-    allocator: Allocator,
+    allocator: std.mem.Allocator,
     username: []const u8,
     password: []const u8,
     connection_string: []const u8,
     privilege: Privilege,
-) Self {
-    return Self{
+) Connection {
+    return .{
         .allocator = allocator,
         .username = username,
         .password = password,
@@ -85,7 +82,7 @@ pub fn init(
         .privilege = privilege,
     };
 }
-pub fn deinit(self: *Self) !void {
+pub fn deinit(self: *Connection) !void {
     if (self.dpi_conn != null) {
         if (c.dpiConn_release(self.dpi_conn) < 0) {
             return error.FailedToReleaseConnection;
@@ -93,12 +90,12 @@ pub fn deinit(self: *Self) !void {
     }
 }
 
-fn createContext(self: *Self) !void {
+fn createContext(self: *Connection) !void {
     self.context = Context{};
     try self.context.create();
 }
 
-fn dpiConnCreateParams(self: *Self) !c.dpiConnCreateParams {
+fn dpiConnCreateParams(self: *Connection) !c.dpiConnCreateParams {
     var params: c.dpiConnCreateParams = undefined;
     if (c.dpiContext_initConnCreateParams(self.context.dpi_context, &params) < 0) {
         return error.FailedToInitializeConnCreateParams;
@@ -107,11 +104,11 @@ fn dpiConnCreateParams(self: *Self) !c.dpiConnCreateParams {
     return params;
 }
 
-pub fn errorMessage(self: *Self) []const u8 {
+pub fn errorMessage(self: *Connection) []const u8 {
     return self.context.errorMessage();
 }
 
-pub fn connect(self: *Self) !void {
+pub fn connect(self: *Connection) !void {
     try self.createContext();
     var create_params = try self.dpiConnCreateParams();
 
@@ -128,7 +125,7 @@ pub fn connect(self: *Self) !void {
         &create_params,
         &dpi_conn,
     ) < 0) {
-        debug.print("Failed to create connection with error: {s}\n", .{self.errorMessage()});
+        std.debug.print("Failed to create connection with error: {s}\n", .{self.errorMessage()});
         return error.FailedToCreateConnection;
     }
 
@@ -138,39 +135,41 @@ pub fn connect(self: *Self) !void {
     self.dpi_conn = dpi_conn;
 }
 test "connect" {
-    var conn = try t.getTestConnection(testing.allocator);
+    var cp = try t.ConnectionParams.initFromEnv(std.testing.allocator);
+    var conn = cp.toConnection();
     try conn.connect();
+    try conn.deinit();
 }
 
-pub fn createStatement(self: *Self) Statement {
+pub fn createStatement(self: *Connection) Statement {
     return Statement.init(self.allocator, self);
 }
 
-pub fn prepareStatement(self: *Self, sql: []const u8) !Statement {
+pub fn prepareStatement(self: *Connection, sql: []const u8) !Statement {
     var stmt = self.createStatement();
     try stmt.prepare(sql);
     return stmt;
 }
 
-pub fn execute(self: *Self, sql: []const u8) !u32 {
+pub fn execute(self: *Connection, sql: []const u8) !u32 {
     var stmt = try self.prepareStatement(sql);
     return try stmt.execute();
 }
 
-pub fn commit(self: *Self) !void {
+pub fn commit(self: *Connection) !void {
     if (c.dpiConn_commit(self.dpi_conn) < 0) {
-        debug.print("Failed to commit with error: {s}\n", .{self.errorMessage()});
+        std.debug.print("Failed to commit with error: {s}\n", .{self.errorMessage()});
         return error.FailedToCommit;
     }
 }
-pub fn rollback(self: *Self) !void {
+pub fn rollback(self: *Connection) !void {
     if (c.dpiConn_rollback(self.dpi_conn) < 0) {
         return error.FailedToRollback;
     }
 }
 
 pub fn newVariable(
-    self: Self,
+    self: Connection,
     dpi_oracle_type: c.dpiOracleTypeNum,
     dpi_native_type: c.dpiNativeTypeNum,
     max_array_size: u32,
