@@ -1,6 +1,6 @@
 const std = @import("std");
 const w = @import("wire.zig");
-const p = @import("proto.zig");
+const p = @import("proto/proto.zig");
 
 const Self = @This();
 const M = @import("M.zig");

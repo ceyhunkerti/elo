@@ -10,7 +10,7 @@ const TableMetadata = @import("../metadata/TableMetadata.zig");
 const utils = @import("../utils.zig");
 const c = @import("../c.zig").c;
 const w = @import("../../../wire/wire.zig");
-const p = @import("../../../wire/proto.zig");
+const p = @import("../../../wire/proto/proto.zig");
 const t = @import("../testing/testing.zig");
 
 allocator: std.mem.Allocator,

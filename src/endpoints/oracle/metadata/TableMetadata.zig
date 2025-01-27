@@ -9,7 +9,7 @@ const utils = @import("../utils.zig");
 const shared = @import("../../shared.zig");
 const TableName = shared.TableName;
 
-const p = @import("../../../wire/proto.zig");
+const p = @import("../../../wire/proto/proto.zig");
 const c = @import("../c.zig").c;
 const e = @import("../error.zig");
 const t = @import("../testing/testing.zig");

@@ -3,7 +3,7 @@ const Allocator = std.mem.Allocator;
 const builtin = @import("builtin");
 const assert = std.debug.assert;
 const testing = std.testing;
-const p = @import("proto.zig");
+const p = @import("proto/proto.zig");
 const M = @import("M.zig");
 
 pub fn AtomicBlockingQueue(comptime T: type) type {

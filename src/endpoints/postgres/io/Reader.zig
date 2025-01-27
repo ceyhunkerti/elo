@@ -6,7 +6,7 @@ const Connection = @import("../Connection.zig");
 const SourceOptions = @import("../options.zig").SourceOptions;
 
 const c = @import("../c.zig").c;
-const p = @import("../../../wire/proto.zig");
+const p = @import("../../../wire/proto/proto.zig");
 const w = @import("../../../wire/wire.zig");
 const M = @import("../../../wire/M.zig");
 
@@ -96,8 +96,14 @@ test "Reader.read" {
             .host = tp.host,
         },
         .fetch_size = 1,
-        .sql = "select 1 as A, 2 as B, to_date('Monday, 27th January 2025', 'Day, DDth Month YYYY') as C",
+        .sql =
+        \\select 1 as A, 2 as B,
+        \\to_date('Monday, 27th January 2025', 'Day, DDth Month YYYY') as C,
+        \\to_timestamp('2025-01-27 02:03:44', 'YYYY-MM-DD HH24:MI:SS') as D,
+        \\to_timestamp('2024-01-27 15:30:45.123456', 'YYYY-MM-DD HH24:MI:SS.FF6') as E
+        ,
     };
+    // std.debug.print("SQL: {s}\n", .{options.sql});
 
     var reader = Reader.init(allocator, options);
     defer reader.deinit();
@@ -111,7 +117,7 @@ test "Reader.read" {
 
     const record = message.data.Record;
 
-    try std.testing.expectEqual(record.len(), 3);
+    try std.testing.expectEqual(record.len(), 5);
     try std.testing.expectEqual(record.get(0).Int, 1);
     try std.testing.expectEqual(record.get(1).Int, 2);
 
@@ -119,4 +125,21 @@ test "Reader.read" {
     try std.testing.expectEqual(date.year, 2025);
     try std.testing.expectEqual(date.month, 1);
     try std.testing.expectEqual(date.day, 27);
+
+    const ts1 = record.get(3).TimeStamp.?;
+    try std.testing.expectEqual(ts1.year, 2025);
+    try std.testing.expectEqual(ts1.month, 1);
+    try std.testing.expectEqual(ts1.day, 27);
+    try std.testing.expectEqual(ts1.hour, 2);
+    try std.testing.expectEqual(ts1.minute, 3);
+    try std.testing.expectEqual(ts1.second, 44);
+
+    const ts2 = record.get(4).TimeStamp.?;
+    try std.testing.expectEqual(ts2.year, 2024);
+    try std.testing.expectEqual(ts2.month, 1);
+    try std.testing.expectEqual(ts2.day, 27);
+    try std.testing.expectEqual(ts2.hour, 15);
+    try std.testing.expectEqual(ts2.minute, 30);
+    try std.testing.expectEqual(ts2.second, 45);
+    try std.testing.expectEqual(ts2.nanosecond, 123456000);
 }

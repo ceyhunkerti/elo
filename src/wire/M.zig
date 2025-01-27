@@ -1,7 +1,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
-const p = @import("proto.zig");
+const p = @import("proto/proto.zig");
 const w = @import("wire.zig");
 
 const Self = @This();

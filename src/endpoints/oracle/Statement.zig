@@ -4,7 +4,7 @@ const std = @import("std");
 const Connection = @import("Connection.zig");
 
 const c = @import("c.zig").c;
-const p = @import("../../wire/proto.zig");
+const p = @import("../../wire/proto/proto.zig");
 const e = @import("error.zig");
 const t = @import("testing/testing.zig");
 

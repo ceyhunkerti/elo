@@ -5,7 +5,7 @@ const Connection = @import("Connection.zig");
 const Column = @import("metadata/Column.zig");
 const CursorMetadata = @import("metadata/CursorMetadata.zig");
 
-const p = @import("../../wire/proto.zig");
+const p = @import("../../wire/proto/proto.zig");
 const c = @import("c.zig").c;
 const t = @import("testing/testing.zig");
 

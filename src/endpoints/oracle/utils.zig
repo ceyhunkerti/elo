@@ -3,7 +3,7 @@ const Allocator = std.mem.Allocator;
 const ConnectionOptions = @import("./options.zig").ConnectionOptions;
 const Connection = @import("./Connection.zig");
 const w = @import("../../wire/wire.zig");
-const p = @import("../../wire/proto.zig");
+const p = @import("../../wire/proto/proto.zig");
 
 const c = @import("c.zig").c;
 

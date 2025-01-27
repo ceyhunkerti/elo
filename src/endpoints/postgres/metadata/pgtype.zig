@@ -1,8 +1,8 @@
 const std = @import("std");
 const c = @import("../c.zig").c;
-const p = @import("../../../wire/proto.zig");
+const p = @import("../../../wire/proto/proto.zig");
 
-// const Error = error{ConversionError};
+const Error = error{invalidFormat};
 
 pub const PostgresType = enum(c.Oid) {
     // Boolean
@@ -112,14 +112,115 @@ pub const PostgresType = enum(c.Oid) {
             .float4 => p.Value{ .Double = if (str) |s| std.fmt.parseFloat(f32, s) catch unreachable else null },
             .float8 => p.Value{ .Double = if (str) |s| std.fmt.parseFloat(f64, s) catch unreachable else null },
             .text => p.Value{ .String = if (str) |s| allocator.dupe(u8, s) catch unreachable else null },
-            .date => p.Value{ .TimeStamp = if (str) |s| brk: {
-                const year = std.fmt.parseInt(i16, s[0..4], 10) catch unreachable;
-                const month = std.fmt.parseInt(u8, s[5..7], 10) catch unreachable;
-                const day = std.fmt.parseInt(u8, s[8..10], 10) catch unreachable;
-                break :brk p.Timestamp{ .year = year, .month = month, .day = day };
-            } else null },
-
+            .timestamp, .date, .timetz, .timestamptz => p.Value{ .TimeStamp = p.Timestamp.fromString(str) catch unreachable },
             else => p.Value{ .String = if (str) |s| allocator.dupe(u8, s) catch unreachable else null },
         };
     }
 };
+
+const Timestamp = p.Timestamp;
+
+pub fn timestampFromString(str: ?[]const u8) !?Timestamp {
+    if (str == null) return null;
+    const input = std.mem.trim(u8, str.?, &std.ascii.whitespace);
+    if (input.len == 0) return null;
+
+    var result = Timestamp{
+        .year = 0,
+        .month = 1,
+        .day = 1,
+    };
+
+    // Handle DATE format: YYYY-MM-DD
+    if (input.len == 10) {
+        try parseDatePart(input, &result);
+        return result;
+    }
+
+    // Handle TIME format: HH:MM:SS[.NNNNNN][+/-HH[:MM]]
+    if (input[2] == ':') {
+        try parseTimePart(input, &result);
+        return result;
+    }
+
+    // Handle TIMESTAMP/TIMESTAMPTZ format: YYYY-MM-DD HH:MM:SS[.NNNNNN][+/-HH[:MM]]
+    if (input.len < 19) return error.InvalidFormat;
+
+    try parseDatePart(input[0..10], &result);
+    if (input[10] != ' ') return error.InvalidFormat;
+    try parseTimePart(input[11..], &result);
+
+    return result;
+}
+
+fn parseDatePart(input: []const u8, result: *Timestamp) !void {
+    if (input.len < 10) return error.InvalidFormat;
+
+    result.year = try std.fmt.parseInt(i16, input[0..4], 10);
+    if (input[4] != '-') return error.InvalidFormat;
+
+    result.month = try std.fmt.parseInt(u8, input[5..7], 10);
+    if (result.month < 1 or result.month > 12) return error.InvalidMonth;
+    if (input[7] != '-') return error.InvalidFormat;
+
+    result.day = try std.fmt.parseInt(u8, input[8..10], 10);
+    if (result.day < 1 or result.day > 31) return error.InvalidDay;
+}
+
+fn parseTimePart(input: []const u8, result: *Timestamp) !void {
+    if (input.len < 8) return error.InvalidFormat;
+
+    result.hour = try std.fmt.parseInt(u8, input[0..2], 10);
+    if (result.hour > 23) return error.InvalidHour;
+    if (input[2] != ':') return error.InvalidFormat;
+
+    result.minute = try std.fmt.parseInt(u8, input[3..5], 10);
+    if (result.minute > 59) return error.InvalidMinute;
+    if (input[5] != ':') return error.InvalidFormat;
+
+    result.second = try std.fmt.parseInt(u8, input[6..8], 10);
+    if (result.second > 59) return error.InvalidSecond;
+
+    var pos: usize = 8;
+
+    // Parse optional fractional seconds
+    if (pos < input.len and input[pos] == '.') {
+        pos += 1;
+        const frac_start = pos;
+        while (pos < input.len and std.ascii.isDigit(input[pos])) : (pos += 1) {}
+        const frac_str = input[frac_start..pos];
+
+        if (frac_str.len > 0) {
+            const frac = try std.fmt.parseInt(u32, frac_str, 10);
+            // Convert to nanoseconds (padding with zeros if less than 9 digits)
+            result.nanosecond = frac * std.math.pow(u32, 10, 9 - @min(frac_str.len, 9));
+        }
+    }
+
+    // Parse optional timezone
+    if (pos < input.len) {
+        switch (input[pos]) {
+            '+', '-' => {
+                const sign: i8 = if (input[pos] == '+') 1 else -1;
+                pos += 1;
+
+                if (pos + 2 > input.len) return error.InvalidFormat;
+                const hours = try std.fmt.parseInt(i8, input[pos .. pos + 2], 10);
+                if (hours > 23) return error.InvalidTimezone;
+                pos += 2;
+
+                var minutes: i8 = 0;
+                if (pos < input.len) {
+                    if (input[pos] == ':') pos += 1;
+                    if (pos + 2 > input.len) return error.InvalidFormat;
+                    minutes = try std.fmt.parseInt(i8, input[pos .. pos + 2], 10);
+                    if (minutes > 59) return error.InvalidTimezone;
+                }
+
+                result.tz_offset.hours = sign * hours;
+                result.tz_offset.minutes = sign * minutes;
+            },
+            else => return error.InvalidFormat,
+        }
+    }
+}
