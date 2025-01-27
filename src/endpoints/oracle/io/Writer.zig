@@ -126,10 +126,7 @@ pub fn prepare(self: *Writer) !void {
     if (self.options.sql) |sql| {
         self.stmt = try self.conn.prepareStatement(sql);
     } else {
-        const col_names = self.options.columnNames();
-        defer if (col_names) |names| self.allocator.free(names);
-
-        const sql = try self.table_metadata.insertQuery(col_names);
+        const sql = try self.table_metadata.insertQuery(self.options.columns);
         defer self.allocator.free(sql);
         self.stmt = try self.conn.prepareStatement(sql);
     }
