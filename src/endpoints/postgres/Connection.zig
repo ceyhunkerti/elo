@@ -1,7 +1,7 @@
 const Connection = @This();
 
 const std = @import("std");
-const Result = @import("Result.zig");
+const Statement = @import("Statement.zig");
 
 const c = @import("c.zig").c;
 const t = @import("testing/testing.zig");
@@ -18,6 +18,7 @@ pg_conn: ?*c.PGconn = null,
 const Error = error{
     ConnectionError,
     SQLExecuteError,
+    CommitError,
 };
 
 pub fn init(
@@ -43,10 +44,10 @@ pub fn init(
 
 pub fn deinit(self: *Connection) void {
     self.allocator.free(self.connection_string);
-    if (self.pg_conn) |conn| {
-        c.PQfinish(conn);
-        self.pg_conn = null;
+    if (self.isConnected()) {
+        c.PQfinish(self.pg_conn);
     }
+    self.pg_conn = null;
 }
 test "Connection.init" {
     var conn = Connection.init(
@@ -78,23 +79,37 @@ test "Connection.connect" {
     try conn.connect();
 }
 
-pub fn execute(self: Connection, sql: []const u8) !Result {
-    const res = c.PQexec(self.pg_conn, sql.ptr);
-    if (res) |r| {
-        if (c.PQresultStatus(r) != c.PGRES_TUPLES_OK) {
-            return error.SQLExecuteError;
-        }
-    } else {
-        return error.SQLExecuteError;
+pub fn isConnected(self: Connection) bool {
+    if (self.pg_conn) |conn| {
+        return c.PQstatus(conn) == c.CONNECTION_OK;
     }
-
-    return Result.init(self.allocator, res);
+    return false;
 }
-test "execute" {
+
+pub fn createStatement(self: *Connection, sql: []const u8) !Statement {
+    return Statement.init(self.allocator, self, sql);
+}
+test "Connection.createStatement" {
     const allocator = std.testing.allocator;
     var conn = t.connection(allocator) catch unreachable;
     defer conn.deinit();
     try conn.connect();
-    const result = try conn.execute("SELECT 1");
-    defer result.deinit();
+    const stmt = try conn.createStatement("SELECT 1");
+    defer stmt.deinit();
+}
+
+pub fn errorMessage(self: Connection) []const u8 {
+    if (self.pg_conn) |conn| {
+        return std.mem.span(c.PQerrorMessage(conn));
+    }
+    return "Not connected";
+}
+
+pub fn commit(self: Connection) !void {
+    const res = c.PQexec(self.pg_conn, "COMMIT");
+    if (c.PQresultStatus(res) != c.PGRES_COMMAND_OK) {
+        std.debug.print("Error committing transaction: {s}\n", .{self.errorMessage()});
+        return error.CommitError;
+    }
+    c.PQclear(res);
 }
