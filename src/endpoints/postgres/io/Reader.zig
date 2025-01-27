@@ -77,7 +77,7 @@ pub fn read(self: *Reader, wire: *w.Wire) !void {
             for (md.columns) |column| {
                 const is_null = c.PQgetisnull(res, @intCast(ri), column.index);
                 const str = if (is_null != 1) std.mem.span(c.PQgetvalue(res, @intCast(ri), @intCast(column.index))) else null;
-                const val: p.Value = column.type.stringToValue(stmt.allocator, str);
+                const val: p.Value = column.type.stringToValue(self.allocator, str);
                 try record.append(val);
             }
             wire.put(try record.asMessage(self.allocator));
@@ -96,7 +96,7 @@ test "Reader.read" {
             .host = tp.host,
         },
         .fetch_size = 1,
-        .sql = "select 1 as A, 2 as B",
+        .sql = "select 1 as A, 2 as B, to_date('Monday, 27th January 2025', 'Day, DDth Month YYYY') as C",
     };
 
     var reader = Reader.init(allocator, options);
@@ -111,7 +111,12 @@ test "Reader.read" {
 
     const record = message.data.Record;
 
-    try std.testing.expectEqual(record.len(), 2);
-    try std.testing.expectEqual(record.item(0).Int, 1);
-    try std.testing.expectEqual(record.item(1).Int, 2);
+    try std.testing.expectEqual(record.len(), 3);
+    try std.testing.expectEqual(record.get(0).Int, 1);
+    try std.testing.expectEqual(record.get(1).Int, 2);
+
+    const date = record.get(2).TimeStamp.?;
+    try std.testing.expectEqual(date.year, 2025);
+    try std.testing.expectEqual(date.month, 1);
+    try std.testing.expectEqual(date.day, 27);
 }

@@ -106,11 +106,19 @@ pub const PostgresType = enum(c.Oid) {
     pub fn stringToValue(self: PostgresType, allocator: std.mem.Allocator, str: ?[]const u8) p.Value {
         return switch (self) {
             .bool => p.Value{ .Boolean = if (str) |s| std.mem.eql(u8, s, "t") else null },
-            .int2 => p.Value{ .Int = if (str) |s| std.fmt.parseInt(i16, s, 10) catch null else null },
-            .int4 => p.Value{ .Int = if (str) |s| std.fmt.parseInt(i32, s, 10) catch null else null },
-            .int8 => p.Value{ .Int = if (str) |s| std.fmt.parseInt(i64, s, 10) catch null else null },
-            .float4 => p.Value{ .Double = if (str) |s| std.fmt.parseFloat(f32, s) catch null else null },
-            .float8 => p.Value{ .Double = if (str) |s| std.fmt.parseFloat(f64, s) catch null else null },
+            .int2 => p.Value{ .Int = if (str) |s| std.fmt.parseInt(i16, s, 10) catch unreachable else null },
+            .int4 => p.Value{ .Int = if (str) |s| std.fmt.parseInt(i32, s, 10) catch unreachable else null },
+            .int8 => p.Value{ .Int = if (str) |s| std.fmt.parseInt(i64, s, 10) catch unreachable else null },
+            .float4 => p.Value{ .Double = if (str) |s| std.fmt.parseFloat(f32, s) catch unreachable else null },
+            .float8 => p.Value{ .Double = if (str) |s| std.fmt.parseFloat(f64, s) catch unreachable else null },
+            .text => p.Value{ .String = if (str) |s| allocator.dupe(u8, s) catch unreachable else null },
+            .date => p.Value{ .TimeStamp = if (str) |s| brk: {
+                const year = std.fmt.parseInt(i16, s[0..4], 10) catch unreachable;
+                const month = std.fmt.parseInt(u8, s[5..7], 10) catch unreachable;
+                const day = std.fmt.parseInt(u8, s[8..10], 10) catch unreachable;
+                break :brk p.Timestamp{ .year = year, .month = month, .day = day };
+            } else null },
+
             else => p.Value{ .String = if (str) |s| allocator.dupe(u8, s) catch unreachable else null },
         };
     }

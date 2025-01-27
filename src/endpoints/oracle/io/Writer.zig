@@ -327,16 +327,16 @@ test "Writer.write" {
 
         switch (record_count) {
             0 => {
-                try std.testing.expectEqual(1, row.?.item(0).Double.?);
-                try std.testing.expectEqualStrings("John", row.?.item(1).String.?);
+                try std.testing.expectEqual(1, row.?.get(0).Double.?);
+                try std.testing.expectEqualStrings("John", row.?.get(1).String.?);
             },
             1 => {
-                try std.testing.expectEqual(2, row.?.item(0).Double.?);
-                try std.testing.expectEqualStrings("Jane", row.?.item(1).String.?);
+                try std.testing.expectEqual(2, row.?.get(0).Double.?);
+                try std.testing.expectEqualStrings("Jane", row.?.get(1).String.?);
             },
             2 => {
-                try std.testing.expectEqual(3, row.?.item(0).Double.?);
-                try std.testing.expectEqualStrings("Έ Ή", row.?.item(1).String.?);
+                try std.testing.expectEqual(3, row.?.get(0).Double.?);
+                try std.testing.expectEqualStrings("Έ Ή", row.?.get(1).String.?);
             },
             else => unreachable,
         }

@@ -120,8 +120,8 @@ test "Wire" {
         switch (message.data) {
             .Metadata => |_| {},
             .Record => |record| {
-                try testing.expectEqual(1, record.item(0).Int);
-                try testing.expectEqual(true, record.item(1).Boolean);
+                try testing.expectEqual(1, record.get(0).Int);
+                try testing.expectEqual(true, record.get(1).Boolean);
             },
             .Nil => break,
         }
@@ -140,5 +140,5 @@ test "MessageQueue sync" {
     const mr = wire.get();
     defer M.deinit(allocator, mr);
 
-    try testing.expectEqual(1, mr.data.Record.item(0).Int);
+    try testing.expectEqual(1, mr.data.Record.get(0).Int);
 }

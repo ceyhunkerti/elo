@@ -80,7 +80,7 @@ pub fn count(conn: *Connection, table_name: []const u8) !f64 {
     const record = try stmt.fetch(try stmt.execute());
     if (record) |r| {
         defer r.deinit(a);
-        return r.item(0).Double.?;
+        return r.get(0).Double.?;
     } else {
         return error.ExpectedRecord;
     }

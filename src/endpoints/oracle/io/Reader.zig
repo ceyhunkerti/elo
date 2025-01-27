@@ -80,8 +80,8 @@ test "Reader.read" {
             .Record => |record| {
                 message_count += 1;
                 try std.testing.expectEqual(record.len(), 2);
-                try std.testing.expectEqual(record.item(0).Double, 1);
-                try std.testing.expectEqual(record.item(1).Double, 2);
+                try std.testing.expectEqual(record.get(0).Double, 1);
+                try std.testing.expectEqual(record.get(1).Double, 2);
             },
             .Nil => {
                 term_received = true;
