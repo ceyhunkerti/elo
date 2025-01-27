@@ -28,10 +28,6 @@ pub fn initConnection(allocator: Allocator, options: ConnectionOptions) *Connect
     return connection;
 }
 
-pub inline fn checkError(result: c_int, err: anytype) !void {
-    if (result < 0) return err;
-}
-
 pub fn truncateTable(conn: *Connection, table: []const u8) !void {
     const sql = try std.fmt.allocPrint(a, "truncate table {s}", .{table});
     defer a.free(sql);

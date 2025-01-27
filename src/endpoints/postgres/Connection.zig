@@ -74,7 +74,7 @@ pub fn connect(self: *Connection) !void {
 }
 test "Connection.connect" {
     const allocator = std.testing.allocator;
-    var conn = t.connection(allocator) catch unreachable;
+    var conn = t.connection(allocator);
     defer conn.deinit();
     try conn.connect();
 }
@@ -91,7 +91,7 @@ pub fn createStatement(self: *Connection, sql: []const u8) !Statement {
 }
 test "Connection.createStatement" {
     const allocator = std.testing.allocator;
-    var conn = t.connection(allocator) catch unreachable;
+    var conn = t.connection(allocator);
     defer conn.deinit();
     try conn.connect();
     const stmt = try conn.createStatement("SELECT 1");
@@ -99,8 +99,8 @@ test "Connection.createStatement" {
 }
 
 pub fn errorMessage(self: Connection) []const u8 {
-    if (self.pg_conn) |conn| {
-        return std.mem.span(c.PQerrorMessage(conn));
+    if (self.pg_conn) |_| {
+        return std.mem.span(c.PQerrorMessage(self.pg_conn));
     }
     return "Not connected";
 }

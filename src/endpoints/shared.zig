@@ -1,5 +1,8 @@
 const std = @import("std");
 
+var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+const alloc = gpa.allocator();
+
 pub const TableName = struct {
     allocator: std.mem.Allocator,
     name: []const u8,
@@ -52,4 +55,10 @@ test "TableName" {
     try std.testing.expectEqualStrings("SYS.TEST_TABLE", tn2.name);
     try std.testing.expectEqualStrings("SYS", tn2.schema);
     try std.testing.expectEqualStrings("TEST_TABLE", tn2.tablename);
+}
+
+pub fn truncateTable(conn: anytype, table: []const u8) !void {
+    const sql = try std.fmt.allocPrint(alloc, "truncate table {s}", .{table});
+    defer alloc.free(sql);
+    _ = try conn.execute(sql);
 }
