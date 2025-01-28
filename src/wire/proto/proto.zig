@@ -25,6 +25,21 @@ pub const Metadata = struct {
     }
 };
 
+pub const ValueFormatter = struct {
+    time_format: []const u8 = "%Y-%m-%dT%H:%M:%S",
+};
+pub const Delimiters = struct {
+    field_delimiter: []const u8 = ",",
+    record_delimiter: []const u8 = "\n",
+};
+pub const RecordFormatter = struct {
+    value_formatter: ValueFormatter = .{},
+    delimiters: Delimiters = .{},
+};
+pub const FormatError = error{
+    UnsupportedType,
+};
+
 test {
     std.testing.refAllDecls(@This());
 }

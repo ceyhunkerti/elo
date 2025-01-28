@@ -131,7 +131,7 @@ fn parseTimePart(self: *Timestamp, input: []const u8) !void {
     }
 }
 
-pub fn write(self: Timestamp, format: []const u8, result: *std.ArrayList(u8)) !void {
+pub fn write(self: Timestamp, result: *std.ArrayList(u8), format: []const u8) !void {
     var i: usize = 0;
     while (i < format.len) {
         const c = format[i];
@@ -198,7 +198,7 @@ pub fn toString(self: Timestamp, allocator: std.mem.Allocator, format: []const u
 
     var result = std.ArrayList(u8).init(allocator);
     defer result.deinit();
-    try self.write(format, &result);
+    try self.write(&result, format);
     return result.toOwnedSlice();
 }
 // Example usage:

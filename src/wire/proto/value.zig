@@ -1,9 +1,6 @@
 const std = @import("std");
 const Timestamp = @import("Timestamp.zig");
-
-pub const FormatError = error{
-    UnsupportedType,
-};
+const p = @import("proto.zig");
 
 pub const FieldType = enum {
     String,
@@ -56,17 +53,30 @@ pub const Value = union(FieldType) {
         }
     }
 
-    // returned memory is owned by the caller
-    pub fn toString(self: Value, allocator: std.mem.Allocator) ![]u8 {
-        return switch (self) {
-            .String => |str| if (str) |s| try allocator.dupe(u8, s) else try allocator.dupe(u8, ""),
-            .Double, .Int => |num| if (num) |n| try std.fmt.allocPrint(allocator, "{d}", .{n}) else try allocator.dupe(u8, ""),
-            .Boolean => |boolean| if (boolean) |b| try std.fmt.allocPrint(allocator, "{b}", .{b}) else try allocator.dupe(u8, ""),
+    pub fn write(self: Value, result: *std.ArrayList(u8), formatter: p.ValueFormatter) !void {
+        switch (self) {
+            .String => |str| if (str) |s| try result.appendSlice(s) else try result.appendSlice(""),
+            .Int => |num| if (num) |n| try result.writer().print("{}", .{n}) else try result.appendSlice(""),
+            .Double => |num| if (num) |n| try result.writer().print("{}", .{n}) else try result.appendSlice(""),
+            .Boolean => |boolean| if (boolean) |b| try result.append(if (b) '1' else '0') else try result.append('0'),
+            .TimeStamp => |timestamp| if (timestamp) |t| try t.write(result, formatter.time_format) else try result.appendSlice(""),
             else => {
                 std.debug.print("Unsupported type: {s}\n", .{@tagName(self)});
                 return error.UnsupportedType;
             },
-        };
+            // .Array => |arr| if (arr) |a| {
+            //     for (a) |item| try item.write(result);
+            // },
+            // .Json => |json| if (json) |j| try j.write(result),
+        }
+    }
+
+    // returned memory is owned by the caller
+    pub fn toString(self: Value, allocator: std.mem.Allocator, formatter: p.ValueFormatter) ![]const u8 {
+        var result = std.ArrayList(u8).init(allocator);
+        defer result.deinit();
+        try self.write(&result, formatter);
+        return result.toOwnedSlice();
     }
 };
 

@@ -100,3 +100,43 @@ test "Mailbox" {
     try std.testing.expect(mailbox.inboxNotEmpty());
     try std.testing.expect(mailbox.isInboxFull());
 }
+
+pub fn inboxToString(self: *Self, allocator: std.mem.Allocator, formatter: p.RecordFormatter) ![]const u8 {
+    var result = std.ArrayList(u8).init(allocator);
+    defer result.deinit();
+
+    const size = self.inbox.len;
+    for (self.inbox, 0..) |node, i| {
+        try node.data.Record.write(&result, formatter);
+        if (i < size - 1) {
+            try result.appendSlice(formatter.delimiters.record_delimiter);
+        }
+    }
+
+    return result.toOwnedSlice();
+}
+
+test "Mailbox.toString" {
+    const allocator = std.testing.allocator;
+
+    var mailbox = try Self.init(allocator, 2);
+    defer mailbox.deinit();
+
+    const m1 = p.Record.Message(allocator, &[_]p.Value{
+        .{ .Int = 1 },
+        .{ .Boolean = true },
+    }) catch unreachable;
+    const m2 = p.Record.Message(allocator, &[_]p.Value{
+        .{ .Int = 2 },
+        .{ .Boolean = false },
+    }) catch unreachable;
+    var messages = [_]*w.Message{ m1, m2 };
+
+    mailbox.sendSliceToInbox(&messages);
+
+    const result = try mailbox.inboxToString(allocator, .{
+        .delimiters = .{ .field_delimiter = ",", .record_delimiter = "\n" },
+    });
+    defer allocator.free(result);
+    try std.testing.expectEqualStrings("1,1\n2,0", result);
+}

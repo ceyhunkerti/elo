@@ -8,10 +8,6 @@ const M = @import("../M.zig");
 const Value = p.Value;
 const ValueDictionary = p.ValueDictionary;
 
-pub const Formatter = struct {
-    time_format: []const u8 = undefined,
-};
-
 values: std.ArrayList(Value) = undefined,
 
 pub fn init(allocator: std.mem.Allocator, size: usize) !Record {
@@ -77,35 +73,21 @@ pub fn asMessage(self: Record, allocator: std.mem.Allocator) !*w.Message {
     return try M.new(allocator, self);
 }
 
-// pub fn toString(self: Record, allocator: std.mem.Allocator, options: struct {}) ![]const u8 {
-//     _ = options;
-
-//     const result = try std.ArrayList([]const u8).initCapacity(allocator, self.values.items.len);
-//     defer result.deinit();
-
-//     for (self.values.items) |value| {
-//         switch (value) {
-//             .String => |s| {
-//                 if (s) |str| try result.append(str) else try result.append("");
-//             },
-//             .Boolean => |boolean| {
-//                 if (boolean) |b| {
-//                     try result.append(if (b) "1" else "0");
-//                 } else try result.append("");
-//             },
-//             .Double => |d| {
-//                 if (d) |f| {
-//                     const f_str = try std.fmt.allocPrint(allocator, "{d}", .{f});
-//                     defer allocator.free(f_str);
-//                     try result.append(f_str);
-//                 } else try result.append("");
-//             },
-//             .TimeStamp => |t| {},
-//         }
-//     }
-
-//     return result.items;
-// }
+pub fn write(self: Record, result: *std.ArrayList(u8), formatter: p.RecordFormatter) !void {
+    const size = self.values.items.len;
+    for (self.values.items, 0..) |value, i| {
+        try value.write(result, formatter.value_formatter);
+        if (i < size - 1) {
+            try result.appendSlice(formatter.delimiters.field_delimiter);
+        }
+    }
+}
+pub fn toString(self: Record, allocator: std.mem.Allocator, formatter: p.RecordFormatter) ![]const u8 {
+    var result = std.ArrayList(u8).init(allocator);
+    defer result.deinit();
+    try self.write(&result, formatter);
+    return result.toOwnedSlice();
+}
 
 test "Record" {
     const allocator = std.testing.allocator;
