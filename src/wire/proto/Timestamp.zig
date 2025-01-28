@@ -131,33 +131,102 @@ fn parseTimePart(self: *Timestamp, input: []const u8) !void {
     }
 }
 
-pub fn format(self: Timestamp, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-    _ = fmt;
-    _ = options;
+pub fn write(self: Timestamp, format: []const u8, result: *std.ArrayList(u8)) !void {
+    var i: usize = 0;
+    while (i < format.len) {
+        const c = format[i];
+        if (c == '%' and i + 1 < format.len) {
+            i += 1;
+            switch (format[i]) {
+                'Y' => try std.fmt.formatInt(@abs(self.year), 10, .lower, .{
+                    .width = 4,
+                    .fill = '0',
+                }, result.writer()),
+                'y' => try std.fmt.formatInt(@mod(@abs(self.year), 100), 10, .lower, .{ .width = 2, .fill = '0' }, result.writer()),
+                'm' => try std.fmt.formatInt(self.month, 10, .lower, .{ .width = 2, .fill = '0' }, result.writer()),
+                'd' => try std.fmt.formatInt(self.day, 10, .lower, .{ .width = 2, .fill = '0' }, result.writer()),
+                'H' => try std.fmt.formatInt(self.hour, 10, .lower, .{ .width = 2, .fill = '0' }, result.writer()),
+                'M' => try std.fmt.formatInt(self.minute, 10, .lower, .{ .width = 2, .fill = '0' }, result.writer()),
+                'S' => try std.fmt.formatInt(self.second, 10, .lower, .{ .width = 2, .fill = '0' }, result.writer()),
+                'f' => try std.fmt.formatInt(self.nanosecond / std.math.pow(u32, 10, 6), 10, .lower, .{ .width = 3, .fill = '0' }, result.writer()),
+                'N' => try std.fmt.formatInt(self.nanosecond, 10, .lower, .{ .width = 9, .fill = '0' }, result.writer()),
+                'z' => {
+                    // Format timezone offset
+                    const abs_hours = @abs(self.tz_offset.hours);
+                    try result.append(if (self.tz_offset.hours >= 0) '+' else '-');
+                    try std.fmt.formatInt(abs_hours, 10, .lower, .{ .width = 2, .fill = '0' }, result.writer());
 
-    try writer.print("{d:0>4}-{d:0>2}-{d:0>2}", .{
-        self.year,
-        self.month,
-        self.day,
-    });
+                    const abs_minutes = @abs(self.tz_offset.minutes);
+                    try std.fmt.formatInt(abs_minutes, 10, .lower, .{ .width = 2, .fill = '0' }, result.writer());
+                },
+                'Z' => {
+                    // Format timezone offset with colon
+                    const abs_hours = @abs(self.tz_offset.hours);
+                    try result.append(if (self.tz_offset.hours >= 0) '+' else '-');
+                    try std.fmt.formatInt(abs_hours, 10, .lower, .{ .width = 2, .fill = '0' }, result.writer());
+                    try result.append(':');
 
-    if (self.hour != 0 or self.minute != 0 or self.second != 0 or self.nanosecond != 0) {
-        try writer.print(" {d:0>2}:{d:0>2}:{d:0>2}", .{
-            self.hour,
-            self.minute,
-            self.second,
-        });
-
-        if (self.nanosecond != 0) {
-            try writer.print(".{d:0>9}", .{self.nanosecond});
+                    const abs_minutes = @abs(self.tz_offset.minutes);
+                    try std.fmt.formatInt(abs_minutes, 10, .lower, .{ .width = 2, .fill = '0' }, result.writer());
+                },
+                '%' => try result.append('%'),
+                else => {
+                    try result.append('%');
+                    try result.append(format[i]);
+                },
+            }
+        } else {
+            try result.append(c);
         }
+        i += 1;
     }
+}
 
-    if (self.tz_offset.hours != 0 or self.tz_offset.minutes != 0) {
-        try writer.print("{s}{d:0>2}:{d:0>2}", .{
-            if (self.tz_offset.hours >= 0) "+" else "-",
-            @abs(self.tz_offset.hours),
-            @abs(self.tz_offset.minutes),
-        });
-    }
+pub fn toString(self: Timestamp, allocator: std.mem.Allocator, format: []const u8) ![]const u8 {
+    // %Y: Full year (4 digits)
+    // %y: Year without century (2 digits)
+    // %m: Month (01-12)
+    // %d: Day of month (01-31)
+    // %H: Hour in 24-hour format (00-23)
+    // %M: Minute (00-59)
+    // %S: Second (00-59)
+    // %f: Milliseconds (3 digits)
+    // %N: Nanoseconds (9 digits)
+    // %z: Timezone offset in ±HHMM format
+    // %Z: Timezone offset in ±HH:MM format
+    // %%: Literal percent sign
+
+    var result = std.ArrayList(u8).init(allocator);
+    defer result.deinit();
+    try self.write(format, &result);
+    return result.toOwnedSlice();
+}
+// Example usage:
+test "timestamp formatting" {
+    const ts = Timestamp{
+        .year = 2024,
+        .month = 3,
+        .day = 14,
+        .hour = 15,
+        .minute = 9,
+        .second = 26,
+        .nanosecond = 535000000,
+        .tz_offset = .{ .hours = -7, .minutes = 30 },
+    };
+
+    const allocator = std.testing.allocator;
+
+    // ISO 8601 format
+    const iso = try ts.toString(allocator, "%Y-%m-%dT%H:%M:%S.%f%Z");
+    defer allocator.free(iso);
+    try std.testing.expectEqualStrings("2024-03-14T15:09:26.535-07:30", iso);
+
+    // Custom format
+    const custom = try ts.toString(allocator, "%d/%m/%y %H:%M:%S %z");
+    defer allocator.free(custom);
+    try std.testing.expectEqualStrings("14/03/24 15:09:26 -0730", custom);
+
+    const just_date = try ts.toString(allocator, "%Y-%m-%d");
+    defer allocator.free(just_date);
+    try std.testing.expectEqualStrings("2024-03-14", just_date);
 }

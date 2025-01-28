@@ -21,5 +21,18 @@ pub const SinkOptions = struct {
     columns: ?[][][:0]const u8 = null,
     sql: ?[:0]const u8 = null,
     mode: enum { Append, Truncate } = .Append,
-    batch_size: u32 = 10_000,
+
+    pub fn getCopySql(self: SinkOptions) ![:0]const u8 {
+        if (self.sql) |sql| {
+            return sql;
+        }
+        if (self.columns) |columns| {
+            const columns_str = try std.mem.join(self.allocator, ",", columns);
+            defer self.allocator.free(columns_str);
+            const sql = try std.fmt.allocPrintZ(self.allocator, "copy {s} ({s}) from stdin", .{ self.table, columns_str });
+            return sql;
+        } else {
+            return try std.fmt.allocPrintZ(self.allocator, "copy {s} from stdin", .{self.table});
+        }
+    }
 };

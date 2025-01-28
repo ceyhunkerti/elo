@@ -241,9 +241,9 @@ test "Writer.write" {
     const r1 = p.Record.fromSlice(
         allocator,
         &[_]p.Value{
-            .{ .Number = 1 }, //id
+            .{ .Int = 1 }, //id
             .{ .String = try allocator.dupe(u8, "John") }, //name
-            .{ .Number = 20 }, //age
+            .{ .Int = 20 }, //age
             .{ .TimeStamp = .{
                 .year = 2000,
                 .month = 1,
@@ -389,7 +389,7 @@ pub fn writeBatch(self: *Writer, mb: *Mailbox) !void {
                         self.dpi_variables.dpi_data_array.?[ci].?[ri].isNull = 1;
                     }
                 },
-                .Double, .Number => |val| {
+                .Double => |val| {
                     if (val) |v| {
                         switch (self.table_metadata.columns.?[ci].dpi_native_type_num) {
                             c.DPI_NATIVE_TYPE_INT64 => {
