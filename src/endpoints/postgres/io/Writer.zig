@@ -6,6 +6,7 @@ const SinkOptions = @import("../options.zig").SinkOptions;
 
 const w = @import("../../../wire/wire.zig");
 const c = @import("../c.zig").c;
+const t = @import("../testing/testing.zig");
 
 allocator: std.mem.Allocator,
 conn: *Connection = undefined,
@@ -28,22 +29,14 @@ pub fn connect(self: Writer) !void {
     return try self.conn.connect();
 }
 
-// pub fn write(self: *Writer, wire: *w.Wire) !void {
+test "postgres.copy" {
+    const allocator = std.testing.allocator;
+    var conn = t.connection(allocator);
+    try conn.connect();
+    defer conn.deinit();
+    const table_name = "TEST_PG_COPY_01";
+    const create_script = "CREATE TABLE TEST_PG_COPY_01 (ID INT not null, NAME VARCHAR(50) not null)";
 
-//     // if (PQputCopyData(conn, data[i], strlen(data[i])) != 1) {
-//     //         fprintf(stderr, "Failed to send COPY data: %s", PQerrorMessage(conn));
-//     //         exit_nicely(conn);
-//     //     }
-
-//     // const char *copyQuery = "COPY mytable (column1, column2, column3) FROM STDIN";
-//     const sql = try self.options.getCopySql();
-
-//     while (true) {
-//         const message = wire.get();
-//         switch (message.data) {
-//             .Metadata => {},
-//             .Record => |record| {},
-//             .Nil => break,
-//         }
-//     }
-// }
+    var tt = try t.TestTable(allocator, &conn, table_name, create_script);
+    defer tt.deinit();
+}
