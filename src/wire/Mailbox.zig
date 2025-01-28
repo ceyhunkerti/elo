@@ -125,10 +125,29 @@ test "Mailbox.toString" {
     const m1 = p.Record.Message(allocator, &[_]p.Value{
         .{ .Int = 1 },
         .{ .Boolean = true },
+        .{ .String = try allocator.dupe(u8, "hello") },
+        .{ .TimeStamp = p.Timestamp{
+            .year = 2000,
+            .month = 1,
+            .day = 1,
+            .hour = 0,
+            .minute = 0,
+            .second = 0,
+            .nanosecond = 0,
+            .tz_offset = .{ .hours = 0, .minutes = 0 },
+        } },
     }) catch unreachable;
     const m2 = p.Record.Message(allocator, &[_]p.Value{
-        .{ .Int = 2 },
-        .{ .Boolean = false },
+        .{ .Int = 2 }, .{ .Boolean = false }, .{ .String = try allocator.dupe(u8, "world") }, .{ .TimeStamp = p.Timestamp{
+            .year = 2000,
+            .month = 1,
+            .day = 1,
+            .hour = 0,
+            .minute = 0,
+            .second = 0,
+            .nanosecond = 0,
+            .tz_offset = .{ .hours = 0, .minutes = 0 },
+        } },
     }) catch unreachable;
     var messages = [_]*w.Message{ m1, m2 };
 
@@ -138,5 +157,8 @@ test "Mailbox.toString" {
         .delimiters = .{ .field_delimiter = ",", .record_delimiter = "\n" },
     });
     defer allocator.free(result);
-    try std.testing.expectEqualStrings("1,1\n2,0", result);
+    try std.testing.expectEqualStrings(
+        \\1,1,hello,2000-01-01T00:00:00
+        \\2,0,world,2000-01-01T00:00:00
+    , result);
 }
