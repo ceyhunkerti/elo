@@ -113,3 +113,12 @@ pub fn commit(self: Connection) !void {
     }
     c.PQclear(res);
 }
+
+pub fn execute(self: Connection, sql: []const u8) !void {
+    const res = c.PQexec(self.pg_conn, sql.ptr);
+    if (c.PQresultStatus(res) != c.PGRES_COMMAND_OK) {
+        std.debug.print("Error executing SQL: {s}\n", .{self.errorMessage()});
+        return error.SQLExecuteError;
+    }
+    c.PQclear(res);
+}

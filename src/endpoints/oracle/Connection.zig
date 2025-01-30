@@ -7,6 +7,7 @@ const Statement = @import("Statement.zig");
 
 const t = @import("testing/testing.zig");
 const c = @import("c.zig").c;
+const p = @import("../../wire/proto/proto.zig");
 
 pub const ConnectionError = error{
     UnknownPrivilegeMode,
@@ -156,9 +157,14 @@ pub fn execute(self: *Connection, sql: []const u8) !u32 {
     return try stmt.execute();
 }
 
+pub fn fetchOne(self: *Connection, sql: []const u8) !?p.Record {
+    var stmt = try self.prepareStatement(sql);
+    const column_count = try stmt.execute();
+    return try stmt.fetch(column_count);
+}
+
 pub fn commit(self: Connection) !void {
     if (c.dpiConn_commit(self.dpi_conn) < 0) {
-        std.debug.print("Failed to commit with error: {s}\n", .{self.errorMessage()});
         return error.FailedToCommit;
     }
 }
