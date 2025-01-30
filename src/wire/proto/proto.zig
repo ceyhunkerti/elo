@@ -12,6 +12,7 @@ pub const Record = @import("Record.zig");
 const v = @import("value.zig");
 pub const Value = v.Value;
 pub const ValueDictionary = v.ValueDictionary;
+pub const FieldType = v.FieldType;
 pub const Field = v.Field;
 
 pub const Metadata = struct {
