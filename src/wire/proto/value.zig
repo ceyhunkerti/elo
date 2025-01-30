@@ -56,8 +56,8 @@ pub const Value = union(FieldType) {
     pub fn write(self: Value, result: *std.ArrayList(u8), formatter: p.ValueFormatter) !void {
         switch (self) {
             .String => |str| if (str) |s| try result.appendSlice(s) else try result.appendSlice(""),
-            .Int => |num| if (num) |n| try result.writer().print("{}", .{n}) else try result.appendSlice(""),
-            .Double => |num| if (num) |n| try result.writer().print("{}", .{n}) else try result.appendSlice(""),
+            .Int => |num| if (num) |n| try result.writer().print("{d}", .{n}) else try result.appendSlice(""),
+            .Double => |num| if (num) |n| try result.writer().print("{d}", .{n}) else try result.appendSlice(""),
             .Boolean => |boolean| if (boolean) |b| try result.append(if (b) '1' else '0') else try result.append('0'),
             .TimeStamp => |timestamp| if (timestamp) |t| try t.write(result, formatter.time_format) else try result.appendSlice(""),
             else => {

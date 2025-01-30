@@ -18,8 +18,9 @@ pub const SourceOptions = struct {
 pub const SinkOptions = struct {
     allocator: std.mem.Allocator = undefined,
     connection: ConnectionOptions,
-    columns: ?[][][:0]const u8 = null,
-    table: [:0]const u8,
+    columns: ?[]const []const u8 = null,
+    table: []const u8,
     mode: enum { Append, Truncate } = .Append,
     copy_options: ?Options = null,
+    batch_size: u32 = 10_000,
 };

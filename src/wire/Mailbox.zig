@@ -107,12 +107,14 @@ pub fn inboxToString(self: *Self, allocator: std.mem.Allocator, formatter: p.Rec
 
     const size = self.inbox.len;
     for (self.inbox, 0..) |node, i| {
+        if (i == self.inbox_index) break;
         try node.data.Record.write(&result, formatter);
         if (i < size - 1) {
             try result.appendSlice(formatter.delimiters.record_delimiter);
         }
     }
 
+    // try result.appendSlice("\x00");
     return result.toOwnedSlice();
 }
 
