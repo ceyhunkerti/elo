@@ -78,18 +78,4 @@ test "postgres.copy" {
 
     // Cleanup and close the connection
     c.PQfinish(conn.pg_conn);
-
-    //       // Fetch the result of the COPY operation
-    //   res = PQgetResult(conn);
-    //   if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-    //     fprintf(stderr, "COPY command failed: %s", PQerrorMessage(conn));
-    //     PQclear(res);
-    //     PQfinish(conn);
-    //     return 1;
-    //   }
-    //   PQclear(res);
-
-    //   // Cleanup and close the connection
-    //   PQfinish(conn);
-
 }
