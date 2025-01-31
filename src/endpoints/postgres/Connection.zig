@@ -1,7 +1,7 @@
 const Connection = @This();
 
 const std = @import("std");
-const Statement = @import("Statement.zig");
+const Cursor = @import("Cursor.zig");
 
 const c = @import("c.zig").c;
 const t = @import("testing/testing.zig");
@@ -19,6 +19,8 @@ const Error = error{
     ConnectionError,
     SQLExecuteError,
     CommitError,
+    TransactionStartError,
+    TransactionEndError,
 };
 
 pub fn init(
@@ -86,30 +88,39 @@ pub fn isConnected(self: Connection) bool {
     return false;
 }
 
-pub fn createStatement(self: *Connection, sql: []const u8) !Statement {
-    return Statement.init(self.allocator, self, sql);
-}
-test "Connection.createStatement" {
-    const allocator = std.testing.allocator;
-    var conn = t.connection(allocator);
-    defer conn.deinit();
-    try conn.connect();
-    const stmt = try conn.createStatement("SELECT 1");
-    defer stmt.deinit();
-}
-
 pub fn errorMessage(self: Connection) []const u8 {
     if (self.pg_conn) |_| {
         return std.mem.span(c.PQerrorMessage(self.pg_conn));
     }
     return "Not connected";
 }
-
 pub fn commit(self: Connection) !void {
     const res = c.PQexec(self.pg_conn, "COMMIT");
     if (c.PQresultStatus(res) != c.PGRES_COMMAND_OK) {
         std.debug.print("Error committing transaction: {s}\n", .{self.errorMessage()});
         return error.CommitError;
+    }
+    c.PQclear(res);
+}
+
+pub fn createCursor(self: *Connection, name: []const u8, sql: []const u8) !Cursor {
+    return try Cursor.init(self.allocator, self, name, sql);
+}
+
+pub fn beginTransaction(self: Connection) !void {
+    const res = c.PQexec(self.pg_conn, "BEGIN");
+    if (c.PQresultStatus(res) != c.PGRES_COMMAND_OK) {
+        std.debug.print("Error starting transaction: {s}\n", .{self.errorMessage()});
+        return error.TransactionStartError;
+    }
+    c.PQclear(res);
+}
+
+pub fn endTransaction(self: Connection) !void {
+    const res = c.PQexec(self.pg_conn, "END");
+    if (c.PQresultStatus(res) != c.PGRES_COMMAND_OK) {
+        std.debug.print("Error ending transaction: {s}\n", .{self.errorMessage()});
+        return error.TransactionEndError;
     }
     c.PQclear(res);
 }
