@@ -19,6 +19,8 @@ const Error = error{
     ConnectionError,
     SQLExecuteError,
     CommitError,
+    TransactionStartError,
+    TransactionEndError,
 };
 
 pub fn init(
@@ -103,6 +105,24 @@ pub fn commit(self: Connection) !void {
 
 pub fn createCursor(self: *Connection, name: []const u8, sql: []const u8) !Cursor {
     return try Cursor.init(self.allocator, self, name, sql);
+}
+
+pub fn beginTransaction(self: Connection) !void {
+    const res = c.PQexec(self.pg_conn, "BEGIN");
+    if (c.PQresultStatus(res) != c.PGRES_COMMAND_OK) {
+        std.debug.print("Error starting transaction: {s}\n", .{self.errorMessage()});
+        return error.TransactionStartError;
+    }
+    c.PQclear(res);
+}
+
+pub fn endTransaction(self: Connection) !void {
+    const res = c.PQexec(self.pg_conn, "END");
+    if (c.PQresultStatus(res) != c.PGRES_COMMAND_OK) {
+        std.debug.print("Error ending transaction: {s}\n", .{self.errorMessage()});
+        return error.TransactionEndError;
+    }
+    c.PQclear(res);
 }
 
 pub fn execute(self: Connection, sql: []const u8) !void {

@@ -40,8 +40,11 @@ pub fn connect(self: *Reader) !void {
 
 pub fn run(self: *Reader, wire: *w.Wire) !void {
     const cursor_name = "elo_cursor";
-    var cursor = try self.conn.createCursor(cursor_name, self.options.sql);
 
+    try self.conn.beginTransaction();
+    defer self.conn.endTransaction() catch unreachable;
+
+    var cursor = try self.conn.createCursor(cursor_name, self.options.sql);
     defer {
         cursor.close() catch unreachable;
         cursor.deinit();

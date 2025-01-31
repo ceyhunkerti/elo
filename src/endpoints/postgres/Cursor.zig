@@ -43,7 +43,7 @@ name: []const u8,
 fetch_size: u32 = FETCH_SIZE,
 query: []const u8,
 metadata: Metadata = undefined,
-fetch_query: []const u8 = undefined,
+fetch_query: [:0]const u8 = undefined,
 
 pg_result: ?*c.PGresult = null,
 row_count: u32 = 0,
@@ -126,7 +126,7 @@ pub fn execute(self: *Cursor) !u32 {
     if (self.row_count == 0) {
         if (self.pg_result) |res| c.PQclear(res);
         self.pg_result = null;
-        return;
+        return 0;
     }
     self.total_row_count += self.row_count;
     return self.row_count;
