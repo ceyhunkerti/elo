@@ -19,7 +19,13 @@ pub fn init(allocator: std.mem.Allocator, options: SinkOptions) Writer {
     return .{
         .allocator = allocator,
         .options = options,
-        .conn = Connection.init(allocator, options.connection.username, options.connection.password, options.connection.host, options.connection.database),
+        .conn = Connection.init(
+            allocator,
+            options.connection.username,
+            options.connection.password,
+            options.connection.host,
+            options.connection.database,
+        ),
     };
 }
 pub fn connect(self: *Writer) !void {
@@ -30,7 +36,7 @@ pub fn deinit(self: *Writer) void {
     self.conn.deinit();
 }
 
-pub fn getRecordFormatter(self: Writer) p.RecordFormatter {
+fn getRecordFormatter(self: Writer) p.RecordFormatter {
     const options = self.options;
     var record_formatter = p.RecordFormatter{};
     if (options.copy_options) |co| {
@@ -44,46 +50,31 @@ pub fn getRecordFormatter(self: Writer) p.RecordFormatter {
     return record_formatter;
 }
 
-pub const WriteOptions = struct {
+const WriteArgs = struct {
     record_formatter: p.RecordFormatter,
     copy: Copy,
-
-    pub fn deinit(self: WriteOptions, allocator: std.mem.Allocator) void {
-        _ = self;
-        _ = allocator;
-    }
 };
 
 pub fn run(self: *Writer, wire: *w.Wire) !void {
-    const record_format = self.getRecordFormatter();
-    const write_options = WriteOptions{
-        .record_formatter = record_format,
+    const args = WriteArgs{
+        .record_formatter = self.getRecordFormatter(),
         .copy = Copy.init(
             self.allocator,
+            &self.conn,
             self.options.table,
             self.options.columns,
             self.options.copy_options,
         ),
     };
-    defer write_options.deinit(self.allocator);
-
     try self.connect();
-    try self.write(wire, write_options);
+    try self.write(wire, args);
 }
 
-pub fn write(self: *Writer, wire: *w.Wire, options: WriteOptions) !void {
+pub fn write(self: *Writer, wire: *w.Wire, args: WriteArgs) !void {
     var mb = try Mailbox.init(self.allocator, self.options.batch_size);
     defer mb.deinit();
 
-    const copy_command = try options.copy.toString();
-    defer self.allocator.free(copy_command);
-
-    const res = c.PQexec(self.conn.pg_conn, @ptrCast(copy_command.ptr));
-    if (c.PQresultStatus(res) != c.PGRES_COPY_IN) {
-        std.debug.print("Error executing COPY: {s}\n", .{std.mem.span(c.PQresultErrorMessage(res))});
-        return error.TransactionError;
-    }
-    c.PQclear(res);
+    try args.copy.execute();
 
     while (true) {
         const message = wire.get();
@@ -92,7 +83,7 @@ pub fn write(self: *Writer, wire: *w.Wire, options: WriteOptions) !void {
             .Record => {
                 mb.sendToInbox(message);
                 if (mb.isInboxFull()) {
-                    try self.writeBatch(&mb, options);
+                    try self.writeBatch(&mb, args);
                     mb.clearInbox();
                 }
             },
@@ -103,25 +94,18 @@ pub fn write(self: *Writer, wire: *w.Wire, options: WriteOptions) !void {
         }
     }
     if (mb.inboxNotEmpty()) {
-        try self.writeBatch(&mb, options);
+        try self.writeBatch(&mb, args);
         mb.clearInbox();
     }
 
-    if (c.PQputCopyEnd(self.conn.pg_conn, null) != 1) {
-        std.debug.print("Failed to send COPY end signal\n", .{});
-        return error.TransactionError;
-    }
+    try args.copy.end();
 }
 
-fn writeBatch(self: Writer, mb: *Mailbox, options: WriteOptions) !void {
-    const data = try mb.inboxToString(self.allocator, options.record_formatter);
+fn writeBatch(self: Writer, mb: *Mailbox, args: WriteArgs) !void {
+    const data = try mb.inboxToString(self.allocator, args.record_formatter);
     defer self.allocator.free(data);
 
-    std.debug.print("DATA: \n{s}\n", .{data});
-    if (c.PQputCopyData(self.conn.pg_conn, @ptrCast(data.ptr), @intCast(data.len)) != 1) {
-        std.debug.print("Failed to send COPY data: {s}\n", .{self.conn.errorMessage()});
-        return error.TransactionError;
-    }
+    try args.copy.copy(data);
 }
 
 test "Writer.run" {
