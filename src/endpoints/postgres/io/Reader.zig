@@ -4,6 +4,7 @@ const shared = @import("../../shared.zig");
 const std = @import("std");
 const Connection = @import("../Connection.zig");
 const SourceOptions = @import("../options.zig").SourceOptions;
+const CursorMetadata = @import("../metadata/CursorMetadata.zig");
 
 const c = @import("../c.zig").c;
 const p = @import("../../../wire/proto/proto.zig");
@@ -13,8 +14,13 @@ const M = @import("../../../wire/M.zig");
 const t = @import("../testing/testing.zig");
 
 allocator: std.mem.Allocator,
-conn: Connection = undefined,
+conn: Connection,
 options: SourceOptions,
+
+const ReadArgs = struct {
+    sql: [:0]const u8,
+    cursor_metadata: *const CursorMetadata,
+};
 
 pub fn init(allocator: std.mem.Allocator, options: SourceOptions) Reader {
     return .{
@@ -38,23 +44,16 @@ pub fn connect(self: *Reader) !void {
 }
 
 pub fn run(self: *Reader, wire: *w.Wire) !void {
-    try self.read(wire);
-}
-
-pub fn read(self: *Reader, wire: *w.Wire) !void {
     const cursor_name = "elo_cursor";
-
     var stmt = try self.conn.createStatement(self.options.sql);
     try stmt.createCursor(cursor_name);
-    var md = try stmt.createCursorMetadata(cursor_name);
-
+    const md = try stmt.createCursorMetadata(cursor_name);
     defer {
         stmt.closeCursor(cursor_name) catch unreachable;
         stmt.conn.commit() catch unreachable;
         stmt.deinit();
         md.deinit();
     }
-
     const sql = try std.fmt.allocPrintZ(
         self.allocator,
         "FETCH {d} FROM {s}",
@@ -62,19 +61,27 @@ pub fn read(self: *Reader, wire: *w.Wire) !void {
     );
     defer self.allocator.free(sql);
 
+    const args = ReadArgs{
+        .sql = sql,
+        .cursor_metadata = &md,
+    };
+
+    try self.read(wire, args);
+}
+
+fn read(self: *Reader, wire: *w.Wire, args: ReadArgs) !void {
     while (true) {
-        const res = c.PQexec(self.conn.pg_conn, sql);
+        const res = c.PQexec(self.conn.pg_conn, args.sql);
         defer c.PQclear(res);
         if (c.PQresultStatus(res) != c.PGRES_TUPLES_OK) {
-            // todo check error
-            break;
+            return error.SQLExecuteError;
         }
         const row_count: usize = @intCast(c.PQntuples(res));
         if (row_count == 0) break;
 
         for (0..row_count) |ri| {
-            var record = try p.Record.init(self.allocator, md.columns.len);
-            for (md.columns) |column| {
+            var record = try p.Record.init(self.allocator, args.cursor_metadata.columns.len);
+            for (args.cursor_metadata.columns) |column| {
                 const is_null = c.PQgetisnull(res, @intCast(ri), column.index);
                 const str = if (is_null != 1) std.mem.span(c.PQgetvalue(res, @intCast(ri), @intCast(column.index))) else null;
                 const val: p.Value = column.type.stringToValue(self.allocator, str);
@@ -84,7 +91,7 @@ pub fn read(self: *Reader, wire: *w.Wire) !void {
         }
     }
 }
-test "Reader.read" {
+test "Reader.run" {
     const allocator = std.testing.allocator;
 
     const tp = t.connectionParams(allocator);

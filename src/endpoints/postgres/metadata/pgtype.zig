@@ -103,7 +103,7 @@ pub const PostgresType = enum(c.Oid) {
         };
     }
 
-    pub fn stringToValue(self: PostgresType, allocator: std.mem.Allocator, str: ?[]const u8) p.Value {
+    pub inline fn stringToValue(self: PostgresType, allocator: std.mem.Allocator, str: ?[]const u8) p.Value {
         return switch (self) {
             .bool => p.Value{ .Boolean = if (str) |s| std.mem.eql(u8, s, "t") else null },
             .int2 => p.Value{ .Int = if (str) |s| std.fmt.parseInt(i16, s, 10) catch unreachable else null },
