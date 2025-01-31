@@ -4,9 +4,11 @@ const std = @import("std");
 const Connection = @import("Connection.zig");
 const Column = @import("metadata/Column.zig");
 const CursorMetadata = @import("metadata/CursorMetadata.zig");
+const QueryMetadata = @import("../shared/db/metadata/Query.zig");
 
 const p = @import("../../wire/proto/proto.zig");
 const c = @import("c.zig").c;
+const e = @import("error.zig");
 const t = @import("testing/testing.zig");
 
 const FETCH_SIZE = 10_000;
@@ -36,7 +38,7 @@ pub fn setFetchSize(self: *Statement, fetch_size: u32) void {
 pub fn createCursor(self: *Statement, name: []const u8) !void {
     const begin_res = c.PQexec(self.conn.pg_conn, "BEGIN");
     if (c.PQresultStatus(begin_res) != c.PGRES_COMMAND_OK) {
-        std.debug.print("Error executing BEGIN: {s}\n", .{self.conn.errorMessage()});
+        std.debug.print("Error executing BEGIN: {s}\n", .{e.resultError(begin_res)});
         return error.TransactionError;
     }
     c.PQclear(begin_res);
@@ -46,7 +48,7 @@ pub fn createCursor(self: *Statement, name: []const u8) !void {
 
     const cursor_res = c.PQexec(self.conn.pg_conn, cursor_script);
     if (c.PQresultStatus(cursor_res) != c.PGRES_COMMAND_OK) {
-        std.debug.print("Error executing cursor: {s}\n", .{self.conn.errorMessage()});
+        std.debug.print("Error executing cursor: {s}\n", .{e.resultError(cursor_res)});
         return error.TransactionError;
     }
     c.PQclear(cursor_res);
@@ -61,12 +63,11 @@ pub fn closeCursor(self: Statement, name: []const u8) !void {
     defer self.allocator.free(sql);
     const res = c.PQexec(self.conn.pg_conn, sql);
     if (c.PQresultStatus(res) != c.PGRES_COMMAND_OK) {
-        std.debug.print("Error executing cursor: {s}\n", .{self.conn.errorMessage()});
+        std.debug.print("Error executing cursor: {s}\n", .{e.resultError(res)});
         return error.TransactionError;
     }
     c.PQclear(res);
 }
-
 test "Statement.testFetch" {
     const allocator = std.testing.allocator;
     const sql =
@@ -147,7 +148,7 @@ pub fn createCursorMetadata(self: *Statement, name: []const u8) !CursorMetadata 
     const res = c.PQexec(self.conn.pg_conn, sql);
     defer c.PQclear(res);
     if (c.PQresultStatus(res) != c.PGRES_TUPLES_OK) {
-        std.debug.print("Error executing FETCH: {s}\n", .{self.conn.errorMessage()});
+        std.debug.print("Error executing FETCH: {s}\n", .{e.resultError(res)});
         return error.TransactionError;
     }
     return try CursorMetadata.init(self.allocator, name, res.?);

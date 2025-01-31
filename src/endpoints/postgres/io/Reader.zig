@@ -103,7 +103,6 @@ test "Reader.read" {
         \\to_timestamp('2024-01-27 15:30:45.123456', 'YYYY-MM-DD HH24:MI:SS.FF6') as E
         ,
     };
-    // std.debug.print("SQL: {s}\n", .{options.sql});
 
     var reader = Reader.init(allocator, options);
     defer reader.deinit();
