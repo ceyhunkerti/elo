@@ -2,7 +2,8 @@ const Cursor = @This();
 
 const std = @import("std");
 const Connection = @import("Connection.zig");
-const Column = @import("metadata/Column.zig");
+const md = @import("metadata/metadata.zig");
+const Column = md.Column;
 
 const p = @import("../../wire/proto/proto.zig");
 const c = @import("c.zig").c;
@@ -13,11 +14,28 @@ const FETCH_SIZE = 10_000;
 pub const Metadata = struct {
     columns: []Column,
 
+    fn getColumn(allocator: std.mem.Allocator, res: *const c.PGresult, index: u32) !Column {
+        const type_oid = c.PQftype(res, @intCast(index));
+        const column_name = std.mem.span(c.PQfname(res, @intCast(index)));
+
+        return Column{
+            .allocator = allocator,
+            .index = index,
+            .name = try allocator.dupe(u8, column_name),
+            .type_info = .{
+                .vendor_type = md.pgtype.PostgresType.fromOid(type_oid) orelse {
+                    std.debug.print("Error: could not find type for OID {d}\n", .{type_oid});
+                    return error.TypeError;
+                },
+            },
+        };
+    }
+
     pub fn init(allocator: std.mem.Allocator, res: *const c.PGresult) !Metadata {
         const column_count: u32 = @intCast(c.PQnfields(res));
         const columns = try allocator.alloc(Column, column_count);
         for (columns, 0..) |*column, i| {
-            column.* = try Column.fromPGMetadata(allocator, res, @intCast(i));
+            column.* = try getColumn(allocator, res, @intCast(i));
         }
         return .{
             .columns = columns,
@@ -136,9 +154,10 @@ pub inline fn fetchNext(self: *Cursor) !?p.Record {
     if (self.row_index >= self.row_count) return null;
     var record = try p.Record.init(self.allocator, self.metadata.columns.len);
     for (self.metadata.columns) |column| {
-        const is_null = c.PQgetisnull(self.pg_result, @intCast(self.row_index), column.index);
+        const is_null = c.PQgetisnull(self.pg_result, @intCast(self.row_index), @intCast(column.index));
         const str = if (is_null != 1) std.mem.span(c.PQgetvalue(self.pg_result, @intCast(self.row_index), @intCast(column.index))) else null;
-        const val: p.Value = column.type.stringToValue(self.allocator, str);
+        const column_type = column.type_info.?.vendor_type.?;
+        const val: p.Value = column_type.stringToValue(self.allocator, str);
         try record.append(val);
     }
     self.row_index += 1;
