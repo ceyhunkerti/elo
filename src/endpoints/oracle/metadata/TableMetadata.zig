@@ -6,18 +6,13 @@ const Column = @import("./Column.zig");
 const Connection = @import("../Connection.zig");
 const utils = @import("../utils.zig");
 
-const shared = @import("../../shared.zig");
-const TableName = shared.TableName;
+const md = @import("../../shared/db/metadata/metadata.zig");
+const TableName = md.TableName;
 
 const p = @import("../../../wire/proto/proto.zig");
 const c = @import("../c.zig").c;
 const e = @import("../error.zig");
 const t = @import("../testing/testing.zig");
-
-pub const Error = error{
-    FailedToGetObjectType,
-    FailedToGetObjectTypeInfo,
-};
 
 allocator: std.mem.Allocator = undefined,
 table: TableName = undefined,

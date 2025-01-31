@@ -1,7 +1,7 @@
 const TestTable = @This();
 
 const std = @import("std");
-const shared = @import("../../shared.zig");
+const md = @import("../../shared/db/metadata/metadata.zig");
 const utils = @import("../utils.zig");
 const Connection = @import("../Connection.zig");
 
@@ -18,7 +18,7 @@ pub const CREATE_SCRIPT =
 
 allocator: std.mem.Allocator,
 conn: *Connection,
-table: shared.TableName = undefined,
+table: md.TableName = undefined,
 create_script: []const u8 = undefined,
 
 pub fn init(
@@ -30,7 +30,7 @@ pub fn init(
     return .{
         .allocator = allocator,
         .conn = conn,
-        .table = shared.TableName.init(allocator, table_name orelse TABLE_NAME, conn.username) catch unreachable,
+        .table = md.TableName.init(allocator, table_name orelse TABLE_NAME, conn.username) catch unreachable,
         .create_script = create_script orelse CREATE_SCRIPT,
     };
 }

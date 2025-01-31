@@ -2,6 +2,7 @@ const Cursor = @This();
 
 const std = @import("std");
 const Connection = @import("Connection.zig");
+
 const md = @import("metadata/metadata.zig");
 const Column = md.Column;
 
@@ -10,6 +11,12 @@ const c = @import("c.zig").c;
 const e = @import("error.zig");
 
 const FETCH_SIZE = 10_000;
+
+pub const Error = error{
+    CursorDeclarationError,
+    CursorCloseError,
+    CursorExecuteError,
+};
 
 pub const Metadata = struct {
     columns: []Column,
@@ -47,12 +54,6 @@ pub const Metadata = struct {
         }
         allocator.free(self.columns);
     }
-};
-
-pub const Error = error{
-    CursorDeclarationError,
-    CursorCloseError,
-    CursorExecuteError,
 };
 
 allocator: std.mem.Allocator,

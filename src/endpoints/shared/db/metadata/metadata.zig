@@ -4,8 +4,8 @@ pub const column = @import("column.zig");
 pub const Column = column.Column;
 pub const ColumnTypeInfo = column.TypeInfo;
 
-// pub const Table = @import("Table.zig");
-// pub const Query = @import("Query.zig");
+pub const table = @import("table.zig");
+pub const TableName = table.TableName;
 
 test {
     std.testing.refAllDecls(@This());
