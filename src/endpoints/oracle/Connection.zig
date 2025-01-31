@@ -9,7 +9,7 @@ const t = @import("testing/testing.zig");
 const c = @import("c.zig").c;
 const p = @import("../../wire/proto/proto.zig");
 
-pub const ConnectionError = error{
+pub const Error = error{
     UnknownPrivilegeMode,
 
     FailedToCreateConnection,
@@ -155,12 +155,6 @@ pub fn prepareStatement(self: *Connection, sql: []const u8) !Statement {
 pub fn execute(self: *Connection, sql: []const u8) !u32 {
     var stmt = try self.prepareStatement(sql);
     return try stmt.execute();
-}
-
-pub fn fetchOne(self: *Connection, sql: []const u8) !?p.Record {
-    var stmt = try self.prepareStatement(sql);
-    const column_count = try stmt.execute();
-    return try stmt.fetch(column_count);
 }
 
 pub fn commit(self: Connection) !void {

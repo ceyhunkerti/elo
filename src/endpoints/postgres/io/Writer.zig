@@ -77,7 +77,6 @@ pub fn write(self: *Writer, wire: *w.Wire, options: WriteOptions) !void {
 
     const copy_command = try options.copy.toString();
     defer self.allocator.free(copy_command);
-    std.debug.print("COPY: \n{s}\n", .{copy_command});
 
     const res = c.PQexec(self.conn.pg_conn, @ptrCast(copy_command.ptr));
     if (c.PQresultStatus(res) != c.PGRES_COPY_IN) {
