@@ -1,5 +1,8 @@
 const Copy = @This();
+
 const std = @import("std");
+const c = @import("c.zig").c;
+const Connection = @import("Connection.zig");
 
 pub const Options = struct {
     format: ?[]const u8 = null,
@@ -39,25 +42,28 @@ pub const Options = struct {
 };
 
 allocator: std.mem.Allocator,
+conn: *Connection,
 table: []const u8,
 columns: ?[]const []const u8 = null,
-with_options: ?Options,
+options: ?Options,
 
 pub fn init(
     allocator: std.mem.Allocator,
+    conn: *Connection,
     table: []const u8,
     columns: ?[]const []const u8,
-    with_options: ?Options,
+    options: ?Options,
 ) Copy {
     return Copy{
         .allocator = allocator,
+        .conn = conn,
         .table = table,
         .columns = columns,
-        .with_options = with_options,
+        .options = options,
     };
 }
 
-pub fn toString(self: Copy) ![]u8 {
+pub fn command(self: Copy) ![]u8 {
     var list = std.ArrayList(u8).init(self.allocator);
     defer list.deinit();
 
@@ -70,18 +76,18 @@ pub fn toString(self: Copy) ![]u8 {
             break :brk null;
         }
     };
-    defer if (columns) |c| self.allocator.free(c);
+    defer if (columns) |col| self.allocator.free(col);
 
-    if (columns) |c| {
+    if (columns) |col| {
         try list.append('(');
-        try list.appendSlice(c);
+        try list.appendSlice(col);
         try list.append(')');
     }
     try list.appendSlice(" FROM STDIN");
 
     const options: ?[]const u8 = brk: {
-        if (self.with_options) |with| {
-            break :brk try with.toString(self.allocator);
+        if (self.options) |o| {
+            break :brk try o.toString(self.allocator);
         } else {
             break :brk null;
         }
@@ -96,4 +102,29 @@ pub fn toString(self: Copy) ![]u8 {
 
     try list.appendSlice("\x00");
     return try list.toOwnedSlice();
+}
+
+pub fn execute(self: Copy) !void {
+    const copy_command = try self.command();
+    defer self.allocator.free(copy_command);
+    const res = c.PQexec(self.conn.pg_conn, @ptrCast(copy_command.ptr));
+    if (c.PQresultStatus(res) != c.PGRES_COPY_IN) {
+        std.debug.print("Error executing COPY: {s}\n", .{std.mem.span(c.PQresultErrorMessage(res))});
+        return error.Fail;
+    }
+    c.PQclear(res);
+}
+
+pub fn end(self: Copy) !void {
+    if (c.PQputCopyEnd(self.conn.pg_conn, null) != 1) {
+        std.debug.print("Failed to send COPY end signal\n", .{});
+        return error.Fail;
+    }
+}
+
+pub fn copy(self: Copy, data: []const u8) !void {
+    if (c.PQputCopyData(self.conn.pg_conn, @ptrCast(data.ptr), @intCast(data.len)) != 1) {
+        std.debug.print("Failed to send COPY data: {s}\n", .{self.conn.errorMessage()});
+        return error.Fail;
+    }
 }

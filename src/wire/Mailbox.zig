@@ -113,8 +113,6 @@ pub fn inboxToString(self: *Self, allocator: std.mem.Allocator, formatter: p.Rec
             try result.appendSlice(formatter.delimiters.record_delimiter);
         }
     }
-
-    // try result.appendSlice("\x00");
     return result.toOwnedSlice();
 }
 
