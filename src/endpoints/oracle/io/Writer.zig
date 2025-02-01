@@ -81,7 +81,7 @@ pub fn initDpiVariables(self: *Writer) !void {
     self.dpi_variables.dpi_data_array = try self.allocator.alloc(?[*c]c.dpiData, self.table_metadata.columnCount());
 
     for (self.table_metadata.columns.?, 0..) |column, ci| {
-        try self.conn.newVariable(
+        try self.conn.newDpiVariable(
             column.dpi_oracle_type_num,
             column.dpi_native_type_num,
             self.options.batch_size,

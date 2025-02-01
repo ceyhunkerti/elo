@@ -168,7 +168,7 @@ pub fn rollback(self: Connection) !void {
     }
 }
 
-pub fn newVariable(
+pub fn newDpiVariable(
     self: Connection,
     dpi_oracle_type: c.dpiOracleTypeNum,
     dpi_native_type: c.dpiNativeTypeNum,
