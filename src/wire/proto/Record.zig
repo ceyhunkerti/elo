@@ -96,7 +96,7 @@ test "Record" {
     defer record.deinit(allocator);
 
     try record.append(.{ .Int = 1 });
-    try record.append(.{ .String = try allocator.dupe(u8, "test") });
+    try record.append(.{ .Bytes = try allocator.dupe(u8, "test") });
 
     try std.testing.expectEqual(@as(usize, 2), record.values.items.len);
 

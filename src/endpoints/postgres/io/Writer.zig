@@ -138,7 +138,7 @@ test "Writer.run" {
         allocator,
         &[_]p.Value{
             .{ .Int = 1 }, //id
-            .{ .String = try allocator.dupe(u8, "John") }, //name
+            .{ .Bytes = try allocator.dupe(u8, "John") }, //name
         },
     ) catch unreachable;
     const m1 = r1.asMessage(allocator) catch unreachable;
@@ -147,7 +147,7 @@ test "Writer.run" {
     // second record
     const r2 = p.Record.fromSlice(allocator, &[_]p.Value{
         .{ .Int = 2 }, //id
-        .{ .String = try allocator.dupe(u8, "Jane") }, //name
+        .{ .Bytes = try allocator.dupe(u8, "Jane") }, //name
     }) catch unreachable;
     const m2 = r2.asMessage(allocator) catch unreachable;
     wire.put(m2);
@@ -155,7 +155,7 @@ test "Writer.run" {
     // // third record with unicode
     // const record3 = p.Record.fromSlice(allocator, &[_]p.Value{
     //     .{ .Int = 3 }, //id
-    //     .{ .String = try allocator.dupe(u8, "Έ Ή") }, //name
+    //     .{ .Bytes = try allocator.dupe(u8, "Έ Ή") }, //name
     // }) catch unreachable;
     // const m3 = record3.asMessage(allocator) catch unreachable;
     // wire.put(m3);

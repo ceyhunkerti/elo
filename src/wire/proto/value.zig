@@ -3,7 +3,7 @@ const Timestamp = @import("Timestamp.zig");
 const p = @import("proto.zig");
 
 pub const FieldType = enum {
-    String,
+    Bytes,
     Int,
     Double,
     TimeStamp,
@@ -30,7 +30,7 @@ pub const Field = struct {
 };
 
 pub const Value = union(FieldType) {
-    String: ?[]u8,
+    Bytes: ?[]u8,
     Int: ?i64,
     Double: ?f64,
     TimeStamp: ?Timestamp,
@@ -40,7 +40,7 @@ pub const Value = union(FieldType) {
 
     pub fn deinit(self: Value, allocator: std.mem.Allocator) void {
         switch (self) {
-            .String => |str| if (str) |s| allocator.free(s),
+            .Bytes => |str| if (str) |s| allocator.free(s),
             // todo
             // .Map => |map| if (map) |m| m.deinit(),
             // .Json => |json| if (json) |j| j.deinit(allocator),
@@ -55,7 +55,7 @@ pub const Value = union(FieldType) {
 
     pub fn write(self: Value, result: *std.ArrayList(u8), formatter: p.ValueFormatter) !void {
         switch (self) {
-            .String => |str| if (str) |s| try result.appendSlice(s) else try result.appendSlice(""),
+            .Bytes => |bytes| if (bytes) |b| try result.appendSlice(b) else try result.appendSlice(""),
             .Int => |num| if (num) |n| try result.writer().print("{d}", .{n}) else try result.appendSlice(""),
             .Double => |num| if (num) |n| try result.writer().print("{d}", .{n}) else try result.appendSlice(""),
             .Boolean => |boolean| if (boolean) |b| try result.append(if (b) '1' else '0') else try result.append('0'),

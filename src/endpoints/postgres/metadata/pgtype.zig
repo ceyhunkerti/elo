@@ -111,9 +111,9 @@ pub const PostgresType = enum(c.Oid) {
             .int8 => p.Value{ .Int = if (str) |s| std.fmt.parseInt(i64, s, 10) catch unreachable else null },
             .float4 => p.Value{ .Double = if (str) |s| std.fmt.parseFloat(f32, s) catch unreachable else null },
             .float8 => p.Value{ .Double = if (str) |s| std.fmt.parseFloat(f64, s) catch unreachable else null },
-            .text => p.Value{ .String = if (str) |s| allocator.dupe(u8, s) catch unreachable else null },
+            .text => p.Value{ .Bytes = if (str) |s| allocator.dupe(u8, s) catch unreachable else null },
             .timestamp, .date, .timetz, .timestamptz => p.Value{ .TimeStamp = p.Timestamp.fromString(str) catch unreachable },
-            else => p.Value{ .String = if (str) |s| allocator.dupe(u8, s) catch unreachable else null },
+            else => p.Value{ .Bytes = if (str) |s| allocator.dupe(u8, s) catch unreachable else null },
         };
     }
 };

@@ -12,12 +12,6 @@ const e = @import("error.zig");
 
 const FETCH_SIZE = 10_000;
 
-pub const Error = error{
-    CursorDeclarationError,
-    CursorCloseError,
-    CursorExecuteError,
-};
-
 pub const Metadata = struct {
     columns: []Column,
 
@@ -32,7 +26,7 @@ pub const Metadata = struct {
             .type_info = .{
                 .vendor_type = md.pgtype.PostgresType.fromOid(type_oid) orelse {
                     std.debug.print("Error: could not find type for OID {d}\n", .{type_oid});
-                    return error.TypeError;
+                    return error.Fail;
                 },
             },
         };
@@ -104,7 +98,7 @@ fn declare(self: Cursor) !void {
     defer c.PQclear(res);
     if (c.PQresultStatus(res) != c.PGRES_COMMAND_OK) {
         std.debug.print("Error executing cursor: {s}\n", .{e.resultError(res)});
-        return error.CursorDeclarationError;
+        return error.Fail;
     }
 }
 
@@ -117,7 +111,7 @@ pub fn close(self: Cursor) !void {
 
     if (c.PQresultStatus(res) != c.PGRES_COMMAND_OK) {
         std.debug.print("Error executing cursor: {s}\n", .{e.resultError(res)});
-        return error.CursorCloseError;
+        return error.Fail;
     }
 }
 
@@ -139,7 +133,7 @@ pub fn execute(self: *Cursor) !u32 {
     if (self.pg_result) |res| c.PQclear(res);
     self.pg_result = c.PQexec(self.conn.pg_conn, @ptrCast(self.fetch_query.ptr));
     if (c.PQresultStatus(self.pg_result) != c.PGRES_TUPLES_OK) {
-        return error.CursorExecuteError;
+        return error.Fail;
     }
     self.row_count = @intCast(c.PQntuples(self.pg_result));
     if (self.row_count == 0) {
