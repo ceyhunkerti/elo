@@ -125,7 +125,7 @@ test "Mailbox.toString" {
     const m1 = p.Record.Message(allocator, &[_]p.Value{
         .{ .Int = 1 },
         .{ .Boolean = true },
-        .{ .String = try allocator.dupe(u8, "hello") },
+        .{ .Bytes = try allocator.dupe(u8, "hello") },
         .{ .TimeStamp = p.Timestamp{
             .year = 2000,
             .month = 1,
@@ -138,7 +138,7 @@ test "Mailbox.toString" {
         } },
     }) catch unreachable;
     const m2 = p.Record.Message(allocator, &[_]p.Value{
-        .{ .Int = 2 }, .{ .Boolean = false }, .{ .String = try allocator.dupe(u8, "world") }, .{ .TimeStamp = p.Timestamp{
+        .{ .Int = 2 }, .{ .Boolean = false }, .{ .Bytes = try allocator.dupe(u8, "world") }, .{ .TimeStamp = p.Timestamp{
             .year = 2000,
             .month = 1,
             .day = 1,

@@ -45,10 +45,7 @@ pub fn fetch(allocator: std.mem.Allocator, conn: *Connection, table_name: []cons
         \\from  all_tables t, all_tab_cols c
         \\where t.table_name = c.table_name and t.table_name = upper('{s}') and t.owner = upper('{s}')
     ,
-        .{
-            table.tablename,
-            table.schema,
-        },
+        .{ table.tablename, table.schema },
     );
     defer allocator.free(sql);
     // std.debug.print("SQL: {s}\n", .{sql});
@@ -73,13 +70,13 @@ pub fn fetch(allocator: std.mem.Allocator, conn: *Connection, table_name: []cons
         defer record.deinit(allocator);
 
         const index = map.get("column_id").?.Double;
-        const name = map.get("column_name").?.String;
-        const nullable = map.get("nullable").?.String.?[0] == 'Y';
-        const data_type = map.get("data_type").?.String;
+        const name = map.get("column_name").?.Bytes;
+        const nullable = map.get("nullable").?.Bytes.?[0] == 'Y';
+        const data_type = map.get("data_type").?.Bytes;
         const length = map.get("data_length").?.Double;
         const precision = map.get("data_precision").?.Double;
         const scale = map.get("data_scale").?.Double;
-        const default = map.get("data_default").?.String;
+        const default = map.get("data_default").?.Bytes;
 
         try columns.append(.{
             .allocator = allocator,

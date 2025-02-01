@@ -13,13 +13,6 @@ dpi_stmt: ?*c.dpiStmt = null,
 
 connection: *Connection = undefined,
 
-pub const Error = error{
-    StatementConfigError,
-    ExecuteStatementError,
-    FetchStatementError,
-    StatementReleaseError,
-};
-
 pub fn init(allocator: std.mem.Allocator, connection: *Connection) Statement {
     return .{
         .allocator = allocator,
@@ -32,14 +25,14 @@ pub fn deinit(self: *Statement) !void {
 }
 
 pub fn release(self: *Statement) !void {
-    try e.check(c.dpiStmt_release(self.dpi_stmt), error.StatementReleaseError);
+    try e.check(c.dpiStmt_release(self.dpi_stmt), error.Fail);
     self.dpi_stmt = null;
 }
 
 pub fn prepare(self: *Statement, sql: []const u8) !void {
     try e.check(
         c.dpiConn_prepareStmt(self.connection.dpi_conn, 0, sql.ptr, @intCast(sql.len), null, 0, &self.dpi_stmt),
-        error.PrepareStatementError,
+        error.Fail,
     );
 }
 
@@ -47,7 +40,7 @@ pub fn setFetchSize(self: *Statement, fetch_size: u32) !void {
     if (fetch_size > 0) {
         try e.check(
             c.dpiStmt_setFetchArraySize(self.dpi_stmt, fetch_size),
-            error.StatementConfigError,
+            error.Fail,
         );
     }
 }
@@ -56,7 +49,7 @@ pub fn execute(self: *Statement) !u32 {
     var column_count: u32 = 0;
     try e.check(
         c.dpiStmt_execute(self.dpi_stmt, c.DPI_MODE_EXEC_DEFAULT, &column_count),
-        error.ExecuteStatementError,
+        error.Fail,
     );
     return column_count;
 }
@@ -67,7 +60,7 @@ pub fn fetch(self: *Statement, column_count: u32) !?p.Record {
     var found: c_int = 0;
 
     if (c.dpiStmt_fetch(self.dpi_stmt, &found, &buffer_row_index) < 0) {
-        return error.FetchStatementError;
+        return error.Fail;
     }
     if (found == 0) {
         return null;
@@ -77,13 +70,13 @@ pub fn fetch(self: *Statement, column_count: u32) !?p.Record {
     for (1..column_count + 1) |i| {
         var data: ?*c.dpiData = undefined;
         if (c.dpiStmt_getQueryValue(self.dpi_stmt, @intCast(i), &native_type_num, &data) < 0) {
-            return error.FetchStatementError;
+            return error.Fail;
         }
         var value: p.Value = undefined;
         switch (native_type_num) {
             c.DPI_NATIVE_TYPE_BYTES => {
                 value = .{
-                    .String = if (data.?.isNull != 0) null else try self.allocator.dupe(
+                    .Bytes = if (data.?.isNull != 0) null else try self.allocator.dupe(
                         u8,
                         std.mem.span(data.?.value.asBytes.ptr),
                     ),
@@ -114,7 +107,7 @@ pub fn fetch(self: *Statement, column_count: u32) !?p.Record {
                 }
             },
             else => {
-                return error.FetchStatementError;
+                return error.Fail;
             },
         }
         try record.append(value);
@@ -144,7 +137,7 @@ test "Statement.fetch" {
         try std.testing.expectEqual(r.len(), 4);
         try std.testing.expectEqual(r.items()[0].Double, 1);
         try std.testing.expectEqual(r.items()[1].Double, 2);
-        try std.testing.expectEqualStrings(r.items()[2].String.?, "hello");
+        try std.testing.expectEqualStrings(r.items()[2].Bytes.?, "hello");
         try std.testing.expectEqual(r.items()[3].TimeStamp.?.day, 1);
         try std.testing.expectEqual(r.items()[3].TimeStamp.?.month, 1);
         try std.testing.expectEqual(r.items()[3].TimeStamp.?.year, 2020);
@@ -154,6 +147,6 @@ test "Statement.fetch" {
 pub fn executeMany(self: *Statement, num_iters: u32) !void {
     try e.check(
         c.dpiStmt_executeMany(self.dpi_stmt, c.DPI_MODE_EXEC_DEFAULT, num_iters),
-        error.ExecuteStatementError,
+        error.Fail,
     );
 }

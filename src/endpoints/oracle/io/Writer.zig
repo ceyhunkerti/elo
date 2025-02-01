@@ -26,11 +26,6 @@ dpi_variables: struct {
 
 stmt: Statement = undefined,
 
-const Error = error{
-    FailedToClearDpiVariables,
-    TypeConversionNotSupported,
-};
-
 pub fn init(allocator: std.mem.Allocator, options: SinkOptions) Writer {
     return .{
         .allocator = allocator,
@@ -75,7 +70,7 @@ pub fn clearDpiVariables(self: Writer) !void {
         if (var_) |v| {
             if (c.dpiVar_release(v) > 0) {
                 std.debug.print("Failed to release variable with error: {s}\n", .{self.conn.errorMessage()});
-                return error.FailedToClearDpiVariables;
+                return error.Fail;
             }
         }
     };
@@ -242,7 +237,7 @@ test "Writer.write" {
         allocator,
         &[_]p.Value{
             .{ .Int = 1 }, //id
-            .{ .String = try allocator.dupe(u8, "John") }, //name
+            .{ .Bytes = try allocator.dupe(u8, "John") }, //name
             .{ .Int = 20 }, //age
             .{ .TimeStamp = .{
                 .year = 2000,
@@ -263,7 +258,7 @@ test "Writer.write" {
     // second record
     const r2 = p.Record.fromSlice(allocator, &[_]p.Value{
         .{ .Int = 2 }, //id
-        .{ .String = try allocator.dupe(u8, "Jane") }, //name
+        .{ .Bytes = try allocator.dupe(u8, "Jane") }, //name
         .{ .Int = 21 }, //age
         .{ .TimeStamp = .{
             .year = 2000,
@@ -283,7 +278,7 @@ test "Writer.write" {
     // third record with unicode
     const record3 = p.Record.fromSlice(allocator, &[_]p.Value{
         .{ .Int = 3 }, //id
-        .{ .String = try allocator.dupe(u8, "Έ Ή") }, //name
+        .{ .Bytes = try allocator.dupe(u8, "Έ Ή") }, //name
         .{ .Int = 22 }, //age
         .{ .TimeStamp = .{
             .year = 2000,
@@ -328,15 +323,15 @@ test "Writer.write" {
         switch (record_count) {
             0 => {
                 try std.testing.expectEqual(1, row.?.get(0).Double.?);
-                try std.testing.expectEqualStrings("John", row.?.get(1).String.?);
+                try std.testing.expectEqualStrings("John", row.?.get(1).Bytes.?);
             },
             1 => {
                 try std.testing.expectEqual(2, row.?.get(0).Double.?);
-                try std.testing.expectEqualStrings("Jane", row.?.get(1).String.?);
+                try std.testing.expectEqualStrings("Jane", row.?.get(1).Bytes.?);
             },
             2 => {
                 try std.testing.expectEqual(3, row.?.get(0).Double.?);
-                try std.testing.expectEqualStrings("Έ Ή", row.?.get(1).String.?);
+                try std.testing.expectEqualStrings("Έ Ή", row.?.get(1).Bytes.?);
             },
             else => unreachable,
         }
@@ -381,7 +376,7 @@ pub fn writeBatch(self: *Writer, mb: *Mailbox) !void {
                                     self.table_metadata.columns.?[ci].name,
                                     self.table_metadata.columns.?[ci].dpi_oracle_type_num,
                                 });
-                                return error.TypeConversionNotSupported;
+                                return error.Fail;
                             },
                         }
                         self.dpi_variables.dpi_data_array.?[ci].?[ri].isNull = 0;
@@ -416,7 +411,7 @@ pub fn writeBatch(self: *Writer, mb: *Mailbox) !void {
                                     self.table_metadata.columns.?[ci].name,
                                     self.table_metadata.columns.?[ci].dpi_oracle_type_num,
                                 });
-                                return error.TypeConversionNotSupported;
+                                return error.Fail;
                             },
                         }
                         self.dpi_variables.dpi_data_array.?[ci].?[ri].isNull = 0;
@@ -424,7 +419,7 @@ pub fn writeBatch(self: *Writer, mb: *Mailbox) !void {
                         self.dpi_variables.dpi_data_array.?[ci].?[ri].isNull = 1;
                     }
                 },
-                .String => |val| {
+                .Bytes => |val| {
                     if (val) |v| {
                         if (self.table_metadata.columns.?[ci].dpi_native_type_num != c.DPI_NATIVE_TYPE_BYTES) {
                             std.debug.print(
@@ -436,7 +431,7 @@ pub fn writeBatch(self: *Writer, mb: *Mailbox) !void {
                                 self.table_metadata.columns.?[ci].name,
                                 self.table_metadata.columns.?[ci].dpi_oracle_type_num,
                             });
-                            return error.TypeConversionNotSupported;
+                            return error.Fail;
                         }
                         if (c.dpiVar_setFromBytes(self.dpi_variables.dpi_var_array.?[ci].?, @intCast(ri), v.ptr, @intCast(v.len)) < 0) {
                             std.debug.print("Failed to setFromBytes with error: {s}\n", .{self.conn.errorMessage()});
