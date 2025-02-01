@@ -107,6 +107,7 @@ pub fn fetch(self: *Statement, column_count: u32) !?p.Record {
                 }
             },
             else => {
+                std.debug.print("Unsupported native type num: {d}\n", .{native_type_num});
                 return error.Fail;
             },
         }

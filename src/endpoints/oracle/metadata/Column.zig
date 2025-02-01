@@ -13,6 +13,7 @@ name: []const u8 = undefined,
 // type info
 dpi_oracle_type_num: c.dpiOracleTypeNum = undefined,
 dpi_native_type_num: c.dpiNativeTypeNum = undefined,
+
 nullable: bool = true,
 oracle_type_name: ?[]const u8 = null,
 length: u32 = 0,
