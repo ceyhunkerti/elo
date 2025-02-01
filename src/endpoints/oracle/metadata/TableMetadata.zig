@@ -45,10 +45,7 @@ pub fn fetch(allocator: std.mem.Allocator, conn: *Connection, table_name: []cons
         \\from  all_tables t, all_tab_cols c
         \\where t.table_name = c.table_name and t.table_name = upper('{s}') and t.owner = upper('{s}')
     ,
-        .{
-            table.tablename,
-            table.schema,
-        },
+        .{ table.tablename, table.schema },
     );
     defer allocator.free(sql);
     // std.debug.print("SQL: {s}\n", .{sql});
