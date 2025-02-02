@@ -69,7 +69,7 @@ test "oracle to oracle" {
 
     const tt = t.TestTable.init(
         allocator,
-        writer.conn,
+        &writer.conn,
         target_table_name,
         \\CREATE TABLE {name} (
         \\  ID NUMBER NOT NULL,
@@ -96,7 +96,7 @@ test "oracle to oracle" {
 
     pth.join();
 
-    const count = try u.count(writer.conn, target_table_name);
+    const count = try u.count(&writer.conn, target_table_name);
 
     try std.testing.expectEqual(count, @as(f64, @floatFromInt(duals.items.len)));
 }
