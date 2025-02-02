@@ -11,23 +11,28 @@ const M = @import("../../../wire/M.zig");
 const t = @import("../testing/testing.zig");
 
 allocator: std.mem.Allocator,
-conn: *Connection = undefined,
+conn: Connection = undefined,
 options: SourceOptions,
 
 pub fn init(allocator: std.mem.Allocator, options: SourceOptions) Reader {
     return .{
         .allocator = allocator,
         .options = options,
-        .conn = utils.initConnection(allocator, options.connection),
+        .conn = Connection.init(
+            allocator,
+            options.connection.username,
+            options.connection.password,
+            options.connection.connection_string,
+            options.connection.privilege,
+        ),
     };
 }
 
-pub fn deinit(self: Reader) !void {
+pub fn deinit(self: *Reader) !void {
     try self.conn.deinit();
-    self.allocator.destroy(self.conn);
 }
 
-pub fn connect(self: Reader) !void {
+pub fn connect(self: *Reader) !void {
     return try self.conn.connect();
 }
 
@@ -35,7 +40,7 @@ pub fn run(self: *Reader, wire: *w.Wire) !void {
     try self.read(wire);
 }
 
-pub fn read(self: Reader, wire: *w.Wire) !void {
+pub fn read(self: *Reader, wire: *w.Wire) !void {
     var stmt = try self.conn.prepareStatement(self.options.sql);
     const column_count = try stmt.execute();
     while (true) {
