@@ -1,7 +1,7 @@
 const std = @import("std");
 const p = @import("../../../../wire/proto/proto.zig");
 
-pub fn TypeInfo(comptime VT: type) type {
+pub fn TypeInfo(comptime T: type) type {
     return struct {
         field_type: p.FieldType = undefined,
         size: ?u32 = null,
@@ -10,12 +10,7 @@ pub fn TypeInfo(comptime VT: type) type {
         nullable: ?bool = null,
         default: ?p.Value = null,
 
-        // database specific id
-        vendor_type: ?VT = null,
-        // database specific name
-        vendor_type_name: ?[]const u8 = null,
-        // database specific native type id
-        native_type_id: ?u32 = null,
+        ext: ?T = null,
 
         pub fn toString(self: TypeInfo, allocator: std.mem.Allocator) ![]const u8 {
             var result = std.ArrayList(u8).init(allocator);
@@ -28,16 +23,16 @@ pub fn TypeInfo(comptime VT: type) type {
     };
 }
 
-pub fn Column(comptime VT: type) type {
+pub fn Column(comptime T: type) type {
     return struct {
         const Self = @This();
 
         allocator: std.mem.Allocator = undefined,
         index: u32,
         name: []const u8 = undefined,
-        type_info: ?TypeInfo(VT) = null,
+        type_info: ?TypeInfo(T) = null,
 
-        pub fn init(allocator: std.mem.Allocator, index: u32, name: []const u8, type_info: ?TypeInfo(VT)) Column {
+        pub fn init(allocator: std.mem.Allocator, index: u32, name: []const u8, type_info: ?TypeInfo(T)) Column(T) {
             return .{
                 .allocator = allocator,
                 .index = index,
@@ -50,8 +45,12 @@ pub fn Column(comptime VT: type) type {
             self.allocator.free(self.name);
 
             if (self.type_info) |ti| {
-                if (ti.vendor_type_name) |vtn| self.allocator.free(vtn);
                 if (ti.default) |d| d.deinit(self.allocator);
+                comptime {
+                    if (@hasField(T, "deinit")) {
+                        if (self.type_info.?.ext) |ext| ext.deinit();
+                    }
+                }
             }
         }
 

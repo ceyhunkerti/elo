@@ -1,4 +1,5 @@
 const std = @import("std");
+const Column = @import("column.zig").Column;
 
 pub const TableName = struct {
     allocator: std.mem.Allocator,
@@ -52,4 +53,32 @@ test "TableName" {
     try std.testing.expectEqualStrings("SYS.TEST_TABLE", tn2.name);
     try std.testing.expectEqualStrings("SYS", tn2.schema);
     try std.testing.expectEqualStrings("TEST_TABLE", tn2.tablename);
+}
+
+pub fn Table(comptime T: type) type {
+    return struct {
+        allocator: std.mem.Allocator,
+        name: TableName,
+        columns: []Column(T),
+
+        pub fn deinit(self: Table(T)) void {
+            self.name.deinit();
+            for (self.columns) |column| {
+                column.deinit();
+            }
+            self.allocator.free(self.columns);
+        }
+
+        pub fn columnNames(self: Table(T)) ![][]const u8 {
+            var names = std.ArrayList([]const u8).init(self.allocator);
+            for (self.columns) |column| {
+                try names.append(column.name);
+            }
+            return names.toOwnedSlice();
+        }
+
+        pub fn columnCount(self: Table(T)) u32 {
+            return @intCast(self.columns.len);
+        }
+    };
 }

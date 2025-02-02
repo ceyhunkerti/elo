@@ -6,7 +6,9 @@ const Statement = @import("../Statement.zig");
 const SinkOptions = @import("../options.zig").SinkOptions;
 const Mailbox = @import("../../../wire/Mailbox.zig");
 const TableMetadata = @import("../metadata/TableMetadata.zig");
+const ArrayBind = @import("../ArrayBind.zig");
 
+const md = @import("../metadata/metadata.zig");
 const utils = @import("../utils.zig");
 const c = @import("../c.zig").c;
 const w = @import("../../../wire/wire.zig");
@@ -18,7 +20,7 @@ conn: *Connection = undefined,
 options: SinkOptions,
 batch_index: u32 = 0,
 
-table_metadata: TableMetadata = .{},
+table: md.Table = undefined,
 dpi_variables: struct {
     dpi_var_array: ?[]?*c.dpiVar = null,
     dpi_data_array: ?[]?[*c]c.dpiData = null,
@@ -37,7 +39,7 @@ pub fn init(allocator: std.mem.Allocator, options: SinkOptions) Writer {
 pub fn deinit(self: Writer) !void {
     try self.conn.deinit();
     self.allocator.destroy(self.conn);
-    self.table_metadata.deinit();
+    self.table.deinit();
 
     try self.clearDpiVariables();
     if (self.dpi_variables.dpi_var_array) |arr| self.allocator.free(arr);
@@ -77,15 +79,21 @@ pub fn clearDpiVariables(self: Writer) !void {
 }
 
 pub fn initDpiVariables(self: *Writer) !void {
-    self.dpi_variables.dpi_var_array = try self.allocator.alloc(?*c.dpiVar, self.table_metadata.columnCount());
-    self.dpi_variables.dpi_data_array = try self.allocator.alloc(?[*c]c.dpiData, self.table_metadata.columnCount());
+    self.dpi_variables.dpi_var_array = try self.allocator.alloc(?*c.dpiVar, self.table.columnCount());
+    self.dpi_variables.dpi_data_array = try self.allocator.alloc(?[*c]c.dpiData, self.table.columnCount());
 
-    for (self.table_metadata.columns.?, 0..) |column, ci| {
+    for (self.table.columns, 0..) |column, ci| {
+        const size = switch (column.type_info.?.ext.?.dpi_native_type_num) {
+            c.DPI_NATIVE_TYPE_BYTES => column.type_info.?.size orelse unreachable,
+            c.DPI_NATIVE_TYPE_INT64 => 0,
+            else => 0,
+        };
+
         try self.conn.newDpiVariable(
-            column.dpi_oracle_type_num,
-            column.dpi_native_type_num,
+            column.type_info.?.ext.?.dpi_oracle_type_num,
+            column.type_info.?.ext.?.dpi_native_type_num,
             self.options.batch_size,
-            column.dpiVarSize(),
+            size,
             false, // todo size_is_bytes
             false, // todo is_array
             null,
@@ -94,7 +102,7 @@ pub fn initDpiVariables(self: *Writer) !void {
         );
     }
 
-    for (0..self.table_metadata.columnCount()) |i| {
+    for (0..self.table.columnCount()) |i| {
         if (c.dpiStmt_bindByPos(
             self.stmt.dpi_stmt,
             @as(u32, @intCast(i)) + 1,
@@ -112,7 +120,7 @@ pub fn prepare(self: *Writer) !void {
         .Truncate => try utils.truncateTable(self.conn, self.options.table),
     }
 
-    self.table_metadata = try TableMetadata.fetch(
+    self.table = try md.getTableMetadata(
         self.allocator,
         self.conn,
         self.options.table,
@@ -121,7 +129,7 @@ pub fn prepare(self: *Writer) !void {
     if (self.options.sql) |sql| {
         self.stmt = try self.conn.prepareStatement(sql);
     } else {
-        const sql = try self.table_metadata.insertQuery(self.options.columns);
+        const sql = try self.getInsertQuery();
         defer self.allocator.free(sql);
         self.stmt = try self.conn.prepareStatement(sql);
     }
@@ -228,7 +236,7 @@ test "Writer.write" {
     try tt.createIfNotExists();
 
     try writer.prepare();
-    try std.testing.expectEqual(5, writer.table_metadata.columnCount());
+    try std.testing.expectEqual(5, writer.table.columnCount());
 
     var wire = w.Wire.init();
 
@@ -348,7 +356,7 @@ pub fn writeBatch(self: *Writer, mb: *Mailbox) !void {
             switch (column) {
                 .Int => |val| {
                     if (val) |v| {
-                        switch (self.table_metadata.columns.?[ci].dpi_native_type_num) {
+                        switch (self.table.columns[ci].type_info.?.ext.?.dpi_native_type_num) {
                             c.DPI_NATIVE_TYPE_INT64 => {
                                 self.dpi_variables.dpi_data_array.?[ci].?[ri].value.asInt64 = v;
                             },
@@ -372,9 +380,9 @@ pub fn writeBatch(self: *Writer, mb: *Mailbox) !void {
                                     \\Column name: {s}
                                     \\Column oracle type num: {d}
                                 , .{
-                                    self.table_metadata.columns.?[ci].dpi_native_type_num,
-                                    self.table_metadata.columns.?[ci].name,
-                                    self.table_metadata.columns.?[ci].dpi_oracle_type_num,
+                                    self.table.columns[ci].type_info.?.ext.?.dpi_native_type_num,
+                                    self.table.columns[ci].name,
+                                    self.table.columns[ci].type_info.?.ext.?.dpi_oracle_type_num,
                                 });
                                 return error.Fail;
                             },
@@ -386,7 +394,7 @@ pub fn writeBatch(self: *Writer, mb: *Mailbox) !void {
                 },
                 .Double => |val| {
                     if (val) |v| {
-                        switch (self.table_metadata.columns.?[ci].dpi_native_type_num) {
+                        switch (self.table.columns[ci].type_info.?.ext.?.dpi_native_type_num) {
                             c.DPI_NATIVE_TYPE_INT64 => {
                                 self.dpi_variables.dpi_data_array.?[ci].?[ri].value.asInt64 = @intFromFloat(v);
                             },
@@ -407,9 +415,9 @@ pub fn writeBatch(self: *Writer, mb: *Mailbox) !void {
                                     \\Column name: {s}
                                     \\Column oracle type num: {d}
                                 , .{
-                                    self.table_metadata.columns.?[ci].dpi_native_type_num,
-                                    self.table_metadata.columns.?[ci].name,
-                                    self.table_metadata.columns.?[ci].dpi_oracle_type_num,
+                                    self.table.columns[ci].type_info.?.ext.?.dpi_native_type_num,
+                                    self.table.columns[ci].name,
+                                    self.table.columns[ci].type_info.?.ext.?.dpi_oracle_type_num,
                                 });
                                 return error.Fail;
                             },
@@ -421,15 +429,15 @@ pub fn writeBatch(self: *Writer, mb: *Mailbox) !void {
                 },
                 .Bytes => |val| {
                     if (val) |v| {
-                        if (self.table_metadata.columns.?[ci].dpi_native_type_num != c.DPI_NATIVE_TYPE_BYTES) {
+                        if (self.table.columns[ci].type_info.?.ext.?.dpi_native_type_num != c.DPI_NATIVE_TYPE_BYTES) {
                             std.debug.print(
                                 \\Type conversion from string to oracle native type num {d} is not supported
                                 \\Column name: {s}
                                 \\Column oracle type num: {d}
                             , .{
-                                self.table_metadata.columns.?[ci].dpi_native_type_num,
-                                self.table_metadata.columns.?[ci].name,
-                                self.table_metadata.columns.?[ci].dpi_oracle_type_num,
+                                self.table.columns[ci].type_info.?.ext.?.dpi_native_type_num,
+                                self.table.columns[ci].name,
+                                self.table.columns[ci].type_info.?.ext.?.dpi_oracle_type_num,
                             });
                             return error.Fail;
                         }
@@ -580,4 +588,49 @@ test "batch-insert" {
 
     try writer.stmt.executeMany(1);
     try writer.conn.commit();
+}
+
+fn getInsertQuery(self: Writer) ![]const u8 {
+    const allocator = self.table.allocator;
+    var bindings = std.ArrayList([]const u8).init(allocator);
+
+    const cns = try self.table.columnNames();
+    // std.debug.print("Columns: {any}\n", .{cns});
+
+    const column_names = brk: {
+        var result = std.ArrayList([]const u8).init(allocator);
+        defer result.deinit();
+        if (self.options.columns) |ocns| {
+            for (cns) |cn| {
+                for (ocns) |ocn| {
+                    if (std.mem.eql(u8, cn, ocn)) {
+                        try result.append(cn);
+                    }
+                }
+            }
+            break :brk try result.toOwnedSlice();
+        } else {
+            break :brk cns;
+        }
+    };
+
+    for (1..column_names.len + 1) |i| {
+        try bindings.append(
+            try std.fmt.allocPrint(allocator, ":{d}", .{i}),
+        );
+    }
+
+    const column_names_str = try std.mem.join(allocator, ",", column_names);
+    const bindings_str = try std.mem.join(allocator, ",", bindings.items);
+    const sql = try std.fmt.allocPrint(allocator,
+        \\INSERT INTO {s} ({s}) VALUES ({s})
+    , .{ self.table.name.name, column_names_str, bindings_str });
+
+    allocator.free(bindings_str);
+    allocator.free(column_names_str);
+    for (bindings.items) |b| allocator.free(b);
+    bindings.deinit();
+    allocator.free(column_names);
+
+    return sql;
 }
