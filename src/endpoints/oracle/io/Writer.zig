@@ -5,7 +5,6 @@ const Connection = @import("../Connection.zig");
 const Statement = @import("../Statement.zig");
 const SinkOptions = @import("../options.zig").SinkOptions;
 const Mailbox = @import("../../../wire/Mailbox.zig");
-const TableMetadata = @import("../metadata/TableMetadata.zig");
 const ArrayBind = @import("../ArrayBind.zig");
 
 const md = @import("../metadata/metadata.zig");
