@@ -27,7 +27,7 @@ pub fn init(allocator: std.mem.Allocator, stmt: *Statement, columns: []md.Column
             else => 0,
         };
 
-        try stmt.conn.newDpiVariable(
+        try stmt.connection.newDpiVariable(
             column.type_info.?.ext.?.dpi_oracle_type_num,
             column.type_info.?.ext.?.dpi_native_type_num,
             @intCast(capacity),
@@ -60,11 +60,13 @@ pub fn deinit(self: *ArrayBind) !void {
     if (self.dpi_var_array) |arr| for (arr) |var_| {
         if (var_) |v| {
             if (c.dpiVar_release(v) > 0) {
-                std.debug.print("Failed to release variable with error: {s}\n", .{self.stmt.conn.errorMessage()});
+                std.debug.print("Failed to release variable with error: {s}\n", .{self.stmt.connection.errorMessage()});
                 return error.Fail;
             }
         }
     };
+    if (self.dpi_var_array) |arr| self.allocator.free(arr);
+    if (self.dpi_data_array) |arr| self.allocator.free(arr);
 }
 
 pub fn add(self: *ArrayBind, index: u32, record: *p.Record) !void {
@@ -86,7 +88,7 @@ pub fn add(self: *ArrayBind, index: u32, record: *p.Record) !void {
                             const str = try std.fmt.allocPrint(self.allocator, "{d}", .{v});
                             defer self.allocator.free(str);
                             if (c.dpiVar_setFromBytes(self.dpi_var_array.?[ci].?, @intCast(index), str.ptr, @intCast(str.len)) < 0) {
-                                std.debug.print("Failed to setFromBytes with error: {s}\n", .{self.stmt.conn.errorMessage()});
+                                std.debug.print("Failed to setFromBytes with error: {s}\n", .{self.stmt.connection.errorMessage()});
                                 unreachable;
                             }
                         },
@@ -121,7 +123,7 @@ pub fn add(self: *ArrayBind, index: u32, record: *p.Record) !void {
                             const str = try std.fmt.allocPrint(self.allocator, "{d}", .{v});
                             defer self.allocator.free(str);
                             if (c.dpiVar_setFromBytes(self.dpi_var_array.?[ci].?, @intCast(index), str.ptr, @intCast(str.len)) < 0) {
-                                std.debug.print("Failed to setFromBytes with error: {s}\n", .{self.stmt.conn.errorMessage()});
+                                std.debug.print("Failed to setFromBytes with error: {s}\n", .{self.stmt.connection.errorMessage()});
                                 unreachable;
                             }
                         },
@@ -158,7 +160,7 @@ pub fn add(self: *ArrayBind, index: u32, record: *p.Record) !void {
                         return error.Fail;
                     }
                     if (c.dpiVar_setFromBytes(self.dpi_var_array.?[ci].?, @intCast(index), v.ptr, @intCast(v.len)) < 0) {
-                        std.debug.print("Failed to setFromBytes with error: {s}\n", .{self.stmt.conn.errorMessage()});
+                        std.debug.print("Failed to setFromBytes with error: {s}\n", .{self.stmt.connection.errorMessage()});
                         unreachable;
                     }
                 } else {
