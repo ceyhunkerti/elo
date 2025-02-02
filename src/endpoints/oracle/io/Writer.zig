@@ -95,8 +95,8 @@ test "Writer.prepare" {
 test "Writer.write .Append" {}
 
 pub fn write(self: *Writer, wire: *w.Wire) !void {
-    var bv = try ArrayBind.init(self.allocator, &self.stmt, self.table.columns, self.options.batch_size);
-    defer bv.deinit() catch unreachable;
+    var ab = try ArrayBind.init(self.allocator, &self.stmt, self.table.columns, self.options.batch_size);
+    defer ab.deinit();
 
     var record_index: u32 = 0;
 
@@ -112,7 +112,7 @@ pub fn write(self: *Writer, wire: *w.Wire) !void {
                 // defer record.deinit(self.allocator);
                 // defer M.deinit(self.allocator, message);
 
-                try bv.add(record_index, record);
+                try ab.add(record_index, record);
                 record_index += 1;
                 if (record_index == self.options.batch_size) {
                     try self.writeBatch(record_index);

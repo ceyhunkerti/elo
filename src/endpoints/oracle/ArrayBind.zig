@@ -56,12 +56,12 @@ pub fn init(allocator: std.mem.Allocator, stmt: *Statement, columns: []md.Column
     };
 }
 
-pub fn deinit(self: *ArrayBind) !void {
+pub fn deinit(self: *ArrayBind) void {
     if (self.dpi_var_array) |arr| for (arr) |var_| {
         if (var_) |v| {
             if (c.dpiVar_release(v) > 0) {
                 std.debug.print("Failed to release variable with error: {s}\n", .{self.stmt.conn.errorMessage()});
-                return error.Fail;
+                unreachable;
             }
         }
     };
