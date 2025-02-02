@@ -12,7 +12,6 @@ const t = @import("testing/testing.zig");
 const o = @import("./options.zig");
 const w = @import("../../wire/wire.zig");
 const p = @import("../../wire/proto/proto.zig");
-const u = @import("utils.zig");
 
 test "oracle to oracle" {
     const allocator = std.testing.allocator;

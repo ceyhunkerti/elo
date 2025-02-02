@@ -4,7 +4,6 @@ const std = @import("std");
 const Connection = @import("../Connection.zig");
 const SourceOptions = @import("../options.zig").SourceOptions;
 
-const utils = @import("../utils.zig");
 const w = @import("../../../wire/wire.zig");
 const M = @import("../../../wire/M.zig");
 

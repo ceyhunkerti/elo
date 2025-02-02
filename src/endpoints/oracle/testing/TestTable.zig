@@ -2,7 +2,6 @@ const TestTable = @This();
 
 const std = @import("std");
 const md = @import("../../shared/db/metadata/metadata.zig");
-const utils = @import("../utils.zig");
 const Connection = @import("../Connection.zig");
 
 pub const TABLE_NAME = "TEST_TABLE";

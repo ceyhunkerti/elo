@@ -7,7 +7,6 @@ const SinkOptions = @import("../options.zig").SinkOptions;
 const ArrayBind = @import("../ArrayBind.zig");
 
 const M = @import("../../../wire/M.zig");
-const utils = @import("../utils.zig");
 const md = @import("../metadata/metadata.zig");
 const c = @import("../c.zig").c;
 const w = @import("../../../wire/wire.zig");
