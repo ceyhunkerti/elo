@@ -11,12 +11,12 @@ const t = @import("testing/testing.zig");
 allocator: std.mem.Allocator = undefined,
 dpi_stmt: ?*c.dpiStmt = null,
 
-connection: *Connection = undefined,
+conn: *Connection = undefined,
 
-pub fn init(allocator: std.mem.Allocator, connection: *Connection) Statement {
+pub fn init(allocator: std.mem.Allocator, conn: *Connection) Statement {
     return .{
         .allocator = allocator,
-        .connection = connection,
+        .conn = conn,
     };
 }
 
@@ -31,7 +31,7 @@ pub fn release(self: *Statement) !void {
 
 pub fn prepare(self: *Statement, sql: []const u8) !void {
     try e.check(
-        c.dpiConn_prepareStmt(self.connection.dpi_conn, 0, sql.ptr, @intCast(sql.len), null, 0, &self.dpi_stmt),
+        c.dpiConn_prepareStmt(self.conn.dpi_conn, 0, sql.ptr, @intCast(sql.len), null, 0, &self.dpi_stmt),
         error.Fail,
     );
 }
