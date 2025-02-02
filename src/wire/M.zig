@@ -19,6 +19,8 @@ pub fn new(allocator: Allocator, val: anytype) !*w.Message {
 }
 
 pub fn deinit(allocator: Allocator, message: *w.Message) void {
-    message.data.deinit(allocator);
+    if (message.data != .Nil) {
+        message.data.deinit(allocator);
+    }
     allocator.destroy(message);
 }

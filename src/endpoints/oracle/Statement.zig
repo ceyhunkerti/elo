@@ -130,6 +130,7 @@ test "Statement.fetch" {
 
     var stmt = try conn.prepareStatement(sql);
     defer stmt.deinit() catch unreachable;
+    try stmt.setFetchSize(1);
 
     const record = try stmt.fetch(try stmt.execute());
     try std.testing.expect(record != null);
