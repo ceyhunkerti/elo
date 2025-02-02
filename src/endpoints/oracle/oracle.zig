@@ -55,7 +55,7 @@ test "oracle to oracle" {
 
     var reader = Reader.init(allocator, so);
     try reader.connect();
-    defer reader.deinit() catch unreachable;
+    defer reader.deinit();
 
     const to = o.SinkOptions{
         .connection = co,
@@ -80,7 +80,7 @@ test "oracle to oracle" {
     defer {
         tt.dropIfExists() catch unreachable;
         tt.deinit();
-        writer.deinit() catch unreachable;
+        writer.deinit();
     }
 
     const producer = struct {

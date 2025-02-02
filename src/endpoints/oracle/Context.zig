@@ -22,5 +22,5 @@ pub fn errorMessage(self: *const Self) []const u8 {
 pub fn printError(self: *const Self) void {
     var err: c.dpiErrorInfo = undefined;
     c.dpiContext_getError(self.dpi_context, &err);
-    std.debug.print("Error: {d} {s}\n", .{ err.code, err.message });
+    std.debug.print("Error: {d} {s}\n", .{ err.code, std.mem.span(err.message) });
 }

@@ -20,12 +20,15 @@ pub fn init(allocator: std.mem.Allocator, conn: *Connection) Statement {
     };
 }
 
-pub fn deinit(self: *Statement) !void {
-    try self.release();
+pub fn deinit(self: *Statement) void {
+    self.release();
 }
 
-pub fn release(self: *Statement) !void {
-    try e.check(c.dpiStmt_release(self.dpi_stmt), error.Fail);
+pub fn release(self: *Statement) void {
+    e.check(c.dpiStmt_release(self.dpi_stmt), error.Fail) catch {
+        std.debug.print("Failed to release statement with error: {s}\n", .{self.conn.context.errorMessage()});
+        unreachable;
+    };
     self.dpi_stmt = null;
 }
 
@@ -126,10 +129,10 @@ test "Statement.fetch" {
     const tp = try t.ConnectionParams.initFromEnv(allocator);
     var conn = tp.toConnection();
     try conn.connect();
-    defer conn.deinit() catch unreachable;
+    defer conn.deinit();
 
     var stmt = try conn.prepareStatement(sql);
-    defer stmt.deinit() catch unreachable;
+    defer stmt.deinit();
     try stmt.setFetchSize(1);
 
     const record = try stmt.fetch(try stmt.execute());

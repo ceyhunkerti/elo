@@ -35,8 +35,8 @@ pub fn init(allocator: std.mem.Allocator, options: SinkOptions) Writer {
     };
 }
 
-pub fn deinit(self: *Writer) !void {
-    try self.conn.deinit();
+pub fn deinit(self: *Writer) void {
+    self.conn.deinit();
     self.table.deinit();
 }
 
@@ -86,7 +86,7 @@ test "Writer.prepare" {
     defer {
         tt.dropIfExists() catch unreachable;
         tt.deinit();
-        writer.deinit() catch unreachable;
+        writer.deinit();
     }
 
     try writer.prepare();
@@ -162,7 +162,7 @@ test "Writer.write" {
     defer {
         tt.dropIfExists() catch unreachable;
         tt.deinit();
-        writer.deinit() catch unreachable;
+        writer.deinit();
     }
     try tt.createIfNotExists();
 

@@ -9,20 +9,6 @@ const t = @import("testing/testing.zig");
 const c = @import("c.zig").c;
 const p = @import("../../wire/proto/proto.zig");
 
-pub const Error = error{
-    UnknownPrivilegeMode,
-
-    FailedToCreateConnection,
-    FailedToReleaseConnection,
-    FailedToDestroyContext,
-    FailedToInitializeConnCreateParams,
-
-    FailedToCommit,
-    FailedToRollback,
-
-    FailedToCreateVariable,
-};
-
 pub const Privilege = enum {
     SYSDBA,
     SYSOPER,
@@ -83,10 +69,11 @@ pub fn init(
         .privilege = privilege,
     };
 }
-pub fn deinit(self: *Connection) !void {
+pub fn deinit(self: *Connection) void {
     if (self.dpi_conn != null) {
         if (c.dpiConn_release(self.dpi_conn) < 0) {
-            return error.FailedToReleaseConnection;
+            std.debug.print("Failed to release connection with error: {s}\n", .{self.context.errorMessage()});
+            unreachable;
         }
     }
 }
@@ -139,7 +126,7 @@ test "connect" {
     var cp = try t.ConnectionParams.initFromEnv(std.testing.allocator);
     var conn = cp.toConnection();
     try conn.connect();
-    try conn.deinit();
+    conn.deinit();
 }
 
 pub fn createStatement(self: *Connection) Statement {
@@ -159,12 +146,12 @@ pub fn execute(self: *Connection, sql: []const u8) !u32 {
 
 pub fn commit(self: Connection) !void {
     if (c.dpiConn_commit(self.dpi_conn) < 0) {
-        return error.FailedToCommit;
+        return error.Fail;
     }
 }
 pub fn rollback(self: Connection) !void {
     if (c.dpiConn_rollback(self.dpi_conn) < 0) {
-        return error.FailedToRollback;
+        return error.Fail;
     }
 }
 
@@ -192,7 +179,7 @@ pub fn newDpiVariable(
         @"var",
         data,
     ) < 0) {
-        return error.FailedToCreateVariable;
+        return error.Fail;
     }
 }
 
@@ -205,7 +192,7 @@ pub fn count(self: *Connection, table_name: []const u8) !f64 {
         defer r.deinit(self.allocator);
         return r.get(0).Double.?;
     } else {
-        return error.ExpectedRecord;
+        return error.Fail;
     }
 }
 
