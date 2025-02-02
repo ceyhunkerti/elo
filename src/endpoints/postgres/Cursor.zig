@@ -24,7 +24,7 @@ pub const Metadata = struct {
             .index = index,
             .name = try allocator.dupe(u8, column_name),
             .type_info = .{
-                .vendor_type = md.pgtype.PostgresType.fromOid(type_oid) orelse {
+                .ext = md.pgtype.PostgresType.fromOid(type_oid) orelse {
                     std.debug.print("Error: could not find type for OID {d}\n", .{type_oid});
                     return error.Fail;
                 },
@@ -151,7 +151,7 @@ pub inline fn fetchNext(self: *Cursor) !?p.Record {
     for (self.metadata.columns) |column| {
         const is_null = c.PQgetisnull(self.pg_result, @intCast(self.row_index), @intCast(column.index));
         const str = if (is_null != 1) std.mem.span(c.PQgetvalue(self.pg_result, @intCast(self.row_index), @intCast(column.index))) else null;
-        const column_type = column.type_info.?.vendor_type.?;
+        const column_type = column.type_info.?.ext.?;
         const val: p.Value = column_type.stringToValue(self.allocator, str);
         try record.append(val);
     }
