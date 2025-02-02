@@ -96,7 +96,7 @@ test "oracle to oracle" {
 
     pth.join();
 
-    const count = try u.count(&writer.conn, target_table_name);
+    const count = try writer.conn.count(target_table_name);
 
     try std.testing.expectEqual(count, @as(f64, @floatFromInt(duals.items.len)));
 }

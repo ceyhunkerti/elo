@@ -50,7 +50,7 @@ pub fn tablename(self: TestTable) []const u8 {
 }
 
 pub fn createIfNotExists(self: TestTable) !void {
-    const exists = try utils.isTableExist(self.conn, self.table.name);
+    const exists = try self.isExists();
     if (exists) return;
     const create_script = try self.resolveCreateScript();
     defer self.allocator.free(create_script);
@@ -66,9 +66,21 @@ pub fn resolveCreateScript(self: TestTable) ![]const u8 {
 }
 
 pub fn dropIfExists(self: TestTable) !void {
-    const exists = try utils.isTableExist(self.conn, self.table.name);
+    const exists = try self.isExists();
     if (!exists) return;
     const sql = try std.fmt.allocPrint(self.allocator, "DROP TABLE {s}", .{self.table.name});
     defer self.allocator.free(sql);
     _ = try self.conn.execute(sql);
+}
+
+pub fn isExists(self: TestTable) !bool {
+    const sql = try std.fmt.allocPrint(self.allocator, "select 1 from {s} where rownum = 1", .{self.name()});
+    defer self.allocator.free(sql);
+    _ = self.conn.execute(sql) catch |err| {
+        if (std.mem.indexOf(u8, self.conn.errorMessage(), "ORA-00942")) |_| {
+            return false;
+        }
+        return err;
+    };
+    return true;
 }

@@ -195,3 +195,16 @@ pub fn newDpiVariable(
         return error.FailedToCreateVariable;
     }
 }
+
+pub fn count(self: *Connection, table_name: []const u8) !f64 {
+    const sql = try std.fmt.allocPrint(self.allocator, "select count(*) from {s}", .{table_name});
+    defer self.allocator.free(sql);
+    var stmt = try self.prepareStatement(sql);
+    const record = try stmt.fetch(try stmt.execute());
+    if (record) |r| {
+        defer r.deinit(self.allocator);
+        return r.get(0).Double.?;
+    } else {
+        return error.ExpectedRecord;
+    }
+}
