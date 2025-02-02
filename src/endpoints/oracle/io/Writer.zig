@@ -47,12 +47,8 @@ pub fn connect(self: *Writer) !void {
 pub fn prepare(self: *Writer) !void {
     // prepare table
     switch (self.options.mode) {
-        .Append => return,
-        .Truncate => {
-            const sql = try std.fmt.allocPrint(self.allocator, "truncate table {s}", .{self.options.table});
-            defer self.allocator.free(sql);
-            _ = try self.conn.execute(sql);
-        },
+        .Append => {},
+        .Truncate => try self.conn.truncate(self.options.table),
     }
 
     // get table metadata
@@ -67,7 +63,7 @@ pub fn prepare(self: *Writer) !void {
         self.stmt = try self.conn.prepareStatement(sql);
     }
 }
-test "Writer.[prepare, resetDpiVariables]" {
+test "Writer.prepare" {
     const allocator = std.testing.allocator;
     const table_name = "TEST_WRITER_01";
 

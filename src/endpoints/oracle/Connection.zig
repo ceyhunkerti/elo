@@ -208,3 +208,9 @@ pub fn count(self: *Connection, table_name: []const u8) !f64 {
         return error.ExpectedRecord;
     }
 }
+
+pub fn truncate(self: *Connection, table_name: []const u8) !void {
+    const sql = try std.fmt.allocPrint(self.allocator, "truncate table {s}", .{table_name});
+    defer self.allocator.free(sql);
+    _ = try self.execute(sql);
+}
