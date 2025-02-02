@@ -2,6 +2,7 @@ const Copy = @This();
 
 const std = @import("std");
 const c = @import("c.zig").c;
+const p = @import("../../wire/proto/proto.zig");
 const Connection = @import("Connection.zig");
 
 pub const Options = struct {
@@ -47,12 +48,18 @@ table: []const u8,
 columns: ?[]const []const u8 = null,
 options: ?Options,
 
+batch_size: u32 = 10_000,
+batch_index: u32 = 0,
+
+data: std.ArrayList(u8),
+
 pub fn init(
     allocator: std.mem.Allocator,
     conn: *Connection,
     table: []const u8,
     columns: ?[]const []const u8,
     options: ?Options,
+    batch_size: u32,
 ) Copy {
     return Copy{
         .allocator = allocator,
@@ -60,6 +67,8 @@ pub fn init(
         .table = table,
         .columns = columns,
         .options = options,
+        .batch_size = batch_size,
+        .data = std.ArrayList(u8).initCapacity(allocator, batch_size * 1_000) catch unreachable, // 1_000 arbitrary record size
     };
 }
 
@@ -104,7 +113,7 @@ pub fn command(self: Copy) ![]u8 {
     return try list.toOwnedSlice();
 }
 
-pub fn execute(self: Copy) !void {
+pub fn start(self: Copy) !void {
     const copy_command = try self.command();
     defer self.allocator.free(copy_command);
     const res = c.PQexec(self.conn.pg_conn, @ptrCast(copy_command.ptr));
@@ -122,9 +131,38 @@ pub fn end(self: Copy) !void {
     }
 }
 
-pub fn copy(self: Copy, data: []const u8) !void {
-    if (c.PQputCopyData(self.conn.pg_conn, @ptrCast(data.ptr), @intCast(data.len)) != 1) {
+pub fn flush(self: Copy) !void {
+    if (c.PQputCopyData(self.conn.pg_conn, @ptrCast(self.data.items.ptr), @intCast(self.data.items.len)) != 1) {
         std.debug.print("Failed to send COPY data: {s}\n", .{self.conn.errorMessage()});
         return error.Fail;
     }
+    self.data.deinit();
+}
+
+pub fn copy(self: *Copy, record: *p.Record, formatter: p.RecordFormatter) !void {
+    if (self.data.items.len > 0) {
+        try self.data.appendSlice("\n");
+    }
+    try record.write(&self.data, formatter);
+
+    self.batch_index += 1;
+
+    if (self.batch_index >= self.batch_size) {
+        try self.flush();
+        self.batch_index = 0;
+        self.data.clearRetainingCapacity();
+    }
+}
+
+pub fn isDirty(self: Copy) bool {
+    return self.data.items.len > 0;
+}
+
+fn flushIfDirty(self: Copy) !void {
+    if (self.isDirty()) try self.flush();
+}
+
+pub fn finish(self: Copy) !void {
+    try self.flushIfDirty();
+    try self.end();
 }

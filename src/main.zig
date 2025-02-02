@@ -1,6 +1,5 @@
 const std = @import("std");
 pub const wire = @import("wire/wire.zig");
-pub const Mailbox = @import("wire/Mailbox.zig");
 pub const proto = @import("wire/proto/proto.zig");
 pub const endpoints = @import("endpoints/endpoint.zig");
 

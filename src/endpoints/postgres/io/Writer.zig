@@ -3,9 +3,9 @@ const Writer = @This();
 const std = @import("std");
 const Connection = @import("../Connection.zig");
 const SinkOptions = @import("../options.zig").SinkOptions;
-const Mailbox = @import("../../../wire/Mailbox.zig");
 const Copy = @import("../Copy.zig");
 
+const M = @import("../../../wire/M.zig");
 const w = @import("../../../wire/wire.zig");
 const c = @import("../c.zig").c;
 const t = @import("../testing/testing.zig");
@@ -50,62 +50,36 @@ fn getRecordFormatter(self: Writer) p.RecordFormatter {
     return record_formatter;
 }
 
-const WriteArgs = struct {
-    record_formatter: p.RecordFormatter,
-    copy: Copy,
-};
-
 pub fn run(self: *Writer, wire: *w.Wire) !void {
-    const args = WriteArgs{
-        .record_formatter = self.getRecordFormatter(),
-        .copy = Copy.init(
-            self.allocator,
-            &self.conn,
-            self.options.table,
-            self.options.columns,
-            self.options.copy_options,
-        ),
-    };
     try self.connect();
-    try self.write(wire, args);
+    try self.write(wire);
 }
 
-pub fn write(self: *Writer, wire: *w.Wire, args: WriteArgs) !void {
-    var mb = try Mailbox.init(self.allocator, self.options.batch_size);
-    defer mb.deinit();
-
-    try args.copy.execute();
+pub fn write(self: *Writer, wire: *w.Wire) !void {
+    const formatter = self.getRecordFormatter();
+    var copy = Copy.init(
+        self.allocator,
+        &self.conn,
+        self.options.table,
+        self.options.columns,
+        self.options.copy_options,
+        self.options.batch_size,
+    );
+    try copy.start();
 
     while (true) {
         const message = wire.get();
+        defer M.deinit(self.allocator, message);
         switch (message.data) {
-            .Metadata => mb.sendToMetadata(message),
-            .Record => {
-                mb.sendToInbox(message);
-                if (mb.isInboxFull()) {
-                    try self.writeBatch(&mb, args);
-                    mb.clearInbox();
-                }
+            .Metadata => {},
+            .Record => |*record| {
+                try copy.copy(record, formatter);
             },
-            .Nil => {
-                mb.sendToNil(message);
-                break;
-            },
+            .Nil => break,
         }
     }
-    if (mb.inboxNotEmpty()) {
-        try self.writeBatch(&mb, args);
-        mb.clearInbox();
-    }
 
-    try args.copy.end();
-}
-
-fn writeBatch(self: Writer, mb: *Mailbox, args: WriteArgs) !void {
-    const data = try mb.inboxToString(self.allocator, args.record_formatter);
-    defer self.allocator.free(data);
-
-    try args.copy.copy(data);
+    try copy.finish();
 }
 
 test "Writer.run" {
