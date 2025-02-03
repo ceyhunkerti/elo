@@ -15,14 +15,6 @@ connection_string: [:0]const u8 = undefined,
 
 pg_conn: ?*c.PGconn = null,
 
-const Error = error{
-    ConnectionError,
-    SQLExecuteError,
-    CommitError,
-    TransactionStartError,
-    TransactionEndError,
-};
-
 pub fn init(
     allocator: std.mem.Allocator,
     username: [:0]const u8,
@@ -68,10 +60,10 @@ pub fn connect(self: *Connection) !void {
         if (c.PQstatus(conn) != c.CONNECTION_OK) {
             std.debug.print("Connection failed: {s}\n", .{c.PQerrorMessage(conn)});
             c.PQfinish(conn);
-            return error.ConnectionError;
+            return error.Fail;
         }
     } else {
-        return error.ConnectionError;
+        return error.Fail;
     }
 }
 test "Connection.connect" {
@@ -98,7 +90,7 @@ pub fn commit(self: Connection) !void {
     const res = c.PQexec(self.pg_conn, "COMMIT");
     if (c.PQresultStatus(res) != c.PGRES_COMMAND_OK) {
         std.debug.print("Error committing transaction: {s}\n", .{self.errorMessage()});
-        return error.CommitError;
+        return error.Fail;
     }
     c.PQclear(res);
 }
@@ -111,7 +103,7 @@ pub fn beginTransaction(self: Connection) !void {
     const res = c.PQexec(self.pg_conn, "BEGIN");
     if (c.PQresultStatus(res) != c.PGRES_COMMAND_OK) {
         std.debug.print("Error starting transaction: {s}\n", .{self.errorMessage()});
-        return error.TransactionStartError;
+        return error.Fail;
     }
     c.PQclear(res);
 }
@@ -120,7 +112,7 @@ pub fn endTransaction(self: Connection) !void {
     const res = c.PQexec(self.pg_conn, "END");
     if (c.PQresultStatus(res) != c.PGRES_COMMAND_OK) {
         std.debug.print("Error ending transaction: {s}\n", .{self.errorMessage()});
-        return error.TransactionEndError;
+        return error.Fail;
     }
     c.PQclear(res);
 }
@@ -129,7 +121,7 @@ pub fn execute(self: Connection, sql: []const u8) !void {
     const res = c.PQexec(self.pg_conn, sql.ptr);
     if (c.PQresultStatus(res) != c.PGRES_COMMAND_OK) {
         std.debug.print("Error executing SQL: {s}\n", .{self.errorMessage()});
-        return error.SQLExecuteError;
+        return error.Fail;
     }
     c.PQclear(res);
 }

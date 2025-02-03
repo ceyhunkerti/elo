@@ -14,9 +14,10 @@ const p = @import("../../../wire/proto/proto.zig");
 const t = @import("../testing/testing.zig");
 
 allocator: std.mem.Allocator,
-conn: Connection = undefined,
+conn: Connection,
 options: SinkOptions,
 batch_index: u32 = 0,
+
 table: md.Table = undefined,
 
 stmt: Statement = undefined,
