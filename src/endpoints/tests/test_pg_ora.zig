@@ -65,6 +65,5 @@ test "postgres to oracle" {
     var wire = w.Wire.init();
 
     try pg_reader.run(&wire);
-    wire.put(w.Term(allocator));
     try ora_writer.run(&wire);
 }

@@ -51,6 +51,7 @@ pub fn run(self: *Reader, wire: *w.Wire) !void {
     }
 
     try self.read(wire, &cursor);
+    wire.put(w.Term(self.allocator));
 }
 
 fn read(self: *Reader, wire: *w.Wire, cursor: *Cursor) !void {
@@ -119,4 +120,8 @@ test "Reader.run" {
     try std.testing.expectEqual(ts2.minute, 30);
     try std.testing.expectEqual(ts2.second, 45);
     try std.testing.expectEqual(ts2.nanosecond, 123456000);
+
+    const term = wire.get();
+    defer M.deinit(allocator, term);
+    try std.testing.expectEqual(term.data, .Nil);
 }

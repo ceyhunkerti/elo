@@ -92,7 +92,10 @@ test "oracle to oracle" {
     var wire = w.Wire.init();
     var pth = try std.Thread.spawn(.{ .allocator = allocator }, producer.producerThread, .{ &reader, &wire });
 
-    writer.run(&wire) catch unreachable;
+    writer.run(&wire) catch |err| {
+        std.debug.print("Error: {s}\n", .{writer.conn.errorMessage()});
+        return err;
+    };
 
     pth.join();
 
