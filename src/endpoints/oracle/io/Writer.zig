@@ -18,7 +18,7 @@ conn: Connection,
 options: SinkOptions,
 batch_index: u32 = 0,
 
-table: md.Table = undefined,
+table: ?md.Table = null,
 
 stmt: Statement = undefined,
 
@@ -38,7 +38,7 @@ pub fn init(allocator: std.mem.Allocator, options: SinkOptions) Writer {
 
 pub fn deinit(self: *Writer) void {
     self.conn.deinit();
-    self.table.deinit();
+    if (self.table) |*table| table.deinit();
 }
 
 pub fn connect(self: *Writer) !void {
@@ -96,7 +96,7 @@ test "Writer.prepare" {
 test "Writer.write .Append" {}
 
 pub fn write(self: *Writer, wire: *w.Wire) !void {
-    var ab = try ArrayBind.init(self.allocator, &self.stmt, self.table.columns, self.options.batch_size);
+    var ab = try ArrayBind.init(self.allocator, &self.stmt, self.table.?.columns, self.options.batch_size);
     defer ab.deinit();
 
     var record_index: u32 = 0;
@@ -168,7 +168,7 @@ test "Writer.write" {
     try tt.createIfNotExists();
 
     try writer.prepare();
-    try std.testing.expectEqual(5, writer.table.columnCount());
+    try std.testing.expectEqual(5, writer.table.?.columnCount());
 
     var wire = w.Wire.init();
 
@@ -291,8 +291,8 @@ pub fn run(self: *Writer, wire: *w.Wire) !void {
 }
 
 fn getInsertQuery(self: Writer) ![]const u8 {
-    const allocator = self.table.allocator;
-    const column_names = try self.table.columnNames();
+    const allocator = self.table.?.allocator;
+    const column_names = try self.table.?.columnNames();
     var bindings = std.ArrayList(u8).init(allocator);
 
     const ColumnInfo = struct {
@@ -344,6 +344,6 @@ fn getInsertQuery(self: Writer) ![]const u8 {
 
     const sql = try std.fmt.allocPrint(allocator,
         \\INSERT INTO {s} ({s}) VALUES ({s})
-    , .{ self.table.name.name, cols, ci.bindings });
+    , .{ self.table.?.name.name, cols, ci.bindings });
     return sql;
 }
