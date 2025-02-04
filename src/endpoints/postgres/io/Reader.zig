@@ -1,6 +1,5 @@
 const Reader = @This();
 
-const shared = @import("../../shared.zig");
 const std = @import("std");
 const Connection = @import("../Connection.zig");
 const Cursor = @import("../Cursor.zig");
