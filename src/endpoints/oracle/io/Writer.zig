@@ -68,7 +68,7 @@ test "Writer.prepare" {
     const allocator = std.testing.allocator;
     const table_name = "TEST_WRITER_01";
 
-    const tp = try t.connectionParams(allocator);
+    const tp = t.connectionParams(allocator);
     const options = SinkOptions{
         .connection = .{
             .connection_string = tp.connection_string,
@@ -131,7 +131,7 @@ pub fn write(self: *Writer, wire: *w.Wire) !void {
 test "Writer.write" {
     const allocator = std.testing.allocator;
     const table_name = "TEST_WRITER_02";
-    const tp = try t.connectionParams(allocator);
+    const tp = t.connectionParams(allocator);
 
     const options = SinkOptions{
         .connection = .{

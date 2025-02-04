@@ -110,19 +110,20 @@ pub const PostgresType = enum(c.Oid) {
             .numeric, .float4, .float8 => p.Value{ .Double = if (str) |s| std.fmt.parseFloat(f64, s) catch unreachable else null },
             .text => p.Value{ .Bytes = if (str) |s| allocator.dupe(u8, s) catch unreachable else null },
             .timestamp, .date, .timetz, .timestamptz => p.Value{ .TimeStamp = p.Timestamp.fromString(str) catch unreachable },
-            else => p.Value{ .Bytes = if (str) |s| allocator.dupe(u8, s) catch unreachable else null },
+            else => {
+                std.debug.print("Unsupported type: {}\n", .{self});
+                unreachable;
+            },
         };
     }
 };
 
-const Timestamp = p.Timestamp;
-
-pub fn timestampFromString(str: ?[]const u8) !?Timestamp {
+pub fn timestampFromString(str: ?[]const u8) !?p.Timestamp {
     if (str == null) return null;
     const input = std.mem.trim(u8, str.?, &std.ascii.whitespace);
     if (input.len == 0) return null;
 
-    var result = Timestamp{
+    var result = p.Timestamp{
         .year = 0,
         .month = 1,
         .day = 1,
@@ -150,7 +151,7 @@ pub fn timestampFromString(str: ?[]const u8) !?Timestamp {
     return result;
 }
 
-fn parseDatePart(input: []const u8, result: *Timestamp) !void {
+fn parseDatePart(input: []const u8, result: *p.Timestamp) !void {
     if (input.len < 10) return error.InvalidFormat;
 
     result.year = try std.fmt.parseInt(i16, input[0..4], 10);
@@ -164,7 +165,7 @@ fn parseDatePart(input: []const u8, result: *Timestamp) !void {
     if (result.day < 1 or result.day > 31) return error.InvalidDay;
 }
 
-fn parseTimePart(input: []const u8, result: *Timestamp) !void {
+fn parseTimePart(input: []const u8, result: *p.Timestamp) !void {
     if (input.len < 8) return error.InvalidFormat;
 
     result.hour = try std.fmt.parseInt(u8, input[0..2], 10);

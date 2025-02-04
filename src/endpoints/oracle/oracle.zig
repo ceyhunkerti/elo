@@ -2,13 +2,14 @@ pub const Connection = @import("Connection.zig");
 pub const Statement = @import("Statement.zig");
 pub const Reader = @import("io/Reader.zig");
 pub const Writer = @import("io/Writer.zig");
+pub const options = @import("options.zig");
+pub const t = @import("testing/testing.zig");
 
 const std = @import("std");
 test {
     std.testing.refAllDecls(@This());
 }
 
-const t = @import("testing/testing.zig");
 const o = @import("./options.zig");
 const w = @import("../../wire/wire.zig");
 const p = @import("../../wire/proto/proto.zig");
@@ -17,7 +18,7 @@ test "oracle to oracle" {
     const allocator = std.testing.allocator;
     const target_table_name = "TEST_ORACLE_TO_ORACLE";
 
-    const tp = try t.connectionParams(allocator);
+    const tp = t.connectionParams(allocator);
     const co = .{
         .connection_string = tp.connection_string,
         .username = tp.username,
