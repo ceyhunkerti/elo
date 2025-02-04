@@ -85,8 +85,8 @@ pub fn fetch(self: *Statement, column_count: u32) !?p.Record {
                         ptr.*.ptr[0..ptr.*.length],
                     ),
                 };
-                if (value.Bytes) |bytes|
-                    std.debug.print("V: {any} {s}\n", .{ value, bytes });
+                // if (value.Bytes) |bytes|
+                //     std.debug.print("V: {any} {s}\n", .{ value, bytes });
             },
             c.DPI_NATIVE_TYPE_FLOAT, c.DPI_NATIVE_TYPE_DOUBLE => {
                 value = .{ .Double = if (data.?.isNull != 0) null else data.?.value.asDouble };

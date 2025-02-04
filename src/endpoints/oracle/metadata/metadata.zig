@@ -24,7 +24,7 @@ pub const ColumnTypeInfo = struct {
                 .dpi_oracle_type_num = c.DPI_ORACLE_TYPE_CHAR,
                 .dpi_native_type_num = c.DPI_NATIVE_TYPE_BYTES,
             };
-        } else if (std.mem.eql(u8, name, "DATE") or std.mem.eql(u8, name, "TIMESTAMP")) {
+        } else if (std.mem.eql(u8, name, "DATE") or std.mem.startsWith(u8, name, "TIMESTAMP")) {
             return .{
                 .dpi_oracle_type_num = c.DPI_ORACLE_TYPE_TIMESTAMP,
                 .dpi_native_type_num = c.DPI_NATIVE_TYPE_TIMESTAMP,

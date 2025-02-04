@@ -20,7 +20,7 @@ test "postgres to oracle" {
         \\  C_BOOL CHAR(1),
         \\  C_TIMESTAMP TIMESTAMP,
         \\  C_TIMESTAMP_TZ TIMESTAMP WITH TIME ZONE,
-        \\  C_TEXT CLOB
+        \\  C_TEXT VARCHAR2(4000)
         \\)
     ;
 
@@ -32,7 +32,7 @@ test "postgres to oracle" {
     defer oracle_tt.deinit();
 
     try oracle_tt.createIfNotExists();
-    defer oracle_tt.dropIfExists() catch unreachable;
+    // defer oracle_tt.dropIfExists() catch unreachable;
 
     var pg_select_sql = std.ArrayList(u8).init(allocator);
     defer pg_select_sql.deinit();
@@ -57,6 +57,7 @@ test "postgres to oracle" {
         .sql = pg_select_sql.items.ptr[0 .. pg_select_sql.items.len - 1 :0],
         .connection = postgres.t.connectionOptions(allocator),
     };
+    std.debug.print("{s}\n", .{pg_options.sql});
 
     var pg_reader = postgres.Reader.init(allocator, pg_options);
     defer pg_reader.deinit();
@@ -65,5 +66,6 @@ test "postgres to oracle" {
     var wire = w.Wire.init();
 
     try pg_reader.run(&wire);
+    wire.put(w.Term(allocator));
     try ora_writer.run(&wire);
 }

@@ -105,14 +105,8 @@ pub fn write(self: *Writer, wire: *w.Wire) !void {
         const message = wire.get();
         defer M.deinit(self.allocator, message);
         switch (message.data) {
-            .Metadata => {
-                // m.deinit(self.allocator);
-                // M.deinit(self.allocator, message);
-            },
+            .Metadata => {},
             .Record => |*record| {
-                // defer record.deinit(self.allocator);
-                // defer M.deinit(self.allocator, message);
-
                 try ab.add(record_index, record);
                 record_index += 1;
                 if (record_index == self.options.batch_size) {

@@ -57,7 +57,7 @@ fn read(self: *Reader, wire: *w.Wire, cursor: *Cursor) !void {
     while (true) {
         const row_count = try cursor.execute();
         if (row_count == 0) break;
-        if (try cursor.fetchNext()) |record| {
+        while (try cursor.fetchNext()) |record| {
             wire.put(try record.asMessage(self.allocator));
         }
     }
