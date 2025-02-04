@@ -26,6 +26,12 @@ pub fn init(allocator: std.mem.Allocator, options: SourceOptions) Reader {
     };
 }
 
+pub fn initAndConnect(allocator: std.mem.Allocator, options: SourceOptions) !Reader {
+    var reader = Reader.init(allocator, options);
+    try reader.connect();
+    return reader;
+}
+
 pub fn deinit(self: *Reader) void {
     self.conn.deinit();
 }
@@ -35,6 +41,9 @@ pub fn connect(self: *Reader) !void {
 }
 
 pub fn run(self: *Reader, wire: *w.Wire) !void {
+    if (!self.conn.isConnected()) {
+        try self.connect();
+    }
     try self.read(wire);
 }
 

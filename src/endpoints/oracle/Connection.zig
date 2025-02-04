@@ -129,6 +129,10 @@ test "connect" {
     conn.deinit();
 }
 
+pub fn isConnected(self: Connection) bool {
+    return self.dpi_conn != null;
+}
+
 pub fn createStatement(self: *Connection) Statement {
     return Statement.init(self.allocator, self);
 }

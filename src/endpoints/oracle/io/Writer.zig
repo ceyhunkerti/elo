@@ -35,6 +35,11 @@ pub fn init(allocator: std.mem.Allocator, options: SinkOptions) Writer {
         ),
     };
 }
+pub fn initAndConnect(allocator: std.mem.Allocator, options: SinkOptions) !Writer {
+    var writer = Writer.init(allocator, options);
+    try writer.connect();
+    return writer;
+}
 
 pub fn deinit(self: *Writer) void {
     self.conn.deinit();
@@ -280,6 +285,9 @@ fn writeBatch(self: *Writer, size: u32) !void {
 }
 
 pub fn run(self: *Writer, wire: *w.Wire) !void {
+    if (!self.conn.isConnected()) {
+        try self.connect();
+    }
     try self.prepare();
     try self.write(wire);
 }

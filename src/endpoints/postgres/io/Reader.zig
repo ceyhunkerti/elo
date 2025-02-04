@@ -39,6 +39,10 @@ pub fn connect(self: *Reader) !void {
 }
 
 pub fn run(self: *Reader, wire: *w.Wire) !void {
+    if (!self.conn.isConnected()) {
+        try self.connect();
+    }
+
     const cursor_name = "elo_cursor";
 
     try self.conn.beginTransaction();

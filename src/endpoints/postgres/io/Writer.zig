@@ -51,7 +51,9 @@ fn getRecordFormatter(self: Writer) p.RecordFormatter {
 }
 
 pub fn run(self: *Writer, wire: *w.Wire) !void {
-    try self.connect();
+    if (!self.conn.isConnected()) {
+        try self.connect();
+    }
     try self.write(wire);
 }
 
