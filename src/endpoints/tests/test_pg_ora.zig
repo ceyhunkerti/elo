@@ -57,7 +57,6 @@ test "postgres to oracle" {
         .sql = pg_select_sql.items.ptr[0 .. pg_select_sql.items.len - 1 :0],
         .connection = postgres.t.connectionOptions(allocator),
     };
-    std.debug.print("{s}\n", .{pg_options.sql});
 
     var pg_reader = postgres.Reader.init(allocator, pg_options);
     defer pg_reader.deinit();
