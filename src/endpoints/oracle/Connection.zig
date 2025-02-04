@@ -86,7 +86,7 @@ fn createContext(self: *Connection) !void {
 fn dpiConnCreateParams(self: *Connection) !c.dpiConnCreateParams {
     var params: c.dpiConnCreateParams = undefined;
     if (c.dpiContext_initConnCreateParams(self.context.dpi_context, &params) < 0) {
-        return error.FailedToInitializeConnCreateParams;
+        return error.Fail;
     }
     params.authMode = self.privilege.toDpi();
     return params;
@@ -118,7 +118,7 @@ pub fn connect(self: *Connection) !void {
     }
 
     if (dpi_conn == null) {
-        return error.FailedToCreateConnection;
+        return error.Fail;
     }
     self.dpi_conn = dpi_conn;
 }

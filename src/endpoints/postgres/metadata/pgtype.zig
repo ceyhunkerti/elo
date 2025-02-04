@@ -106,11 +106,8 @@ pub const PostgresType = enum(c.Oid) {
     pub inline fn stringToValue(self: PostgresType, allocator: std.mem.Allocator, str: ?[]const u8) p.Value {
         return switch (self) {
             .bool => p.Value{ .Boolean = if (str) |s| std.mem.eql(u8, s, "t") else null },
-            .int2 => p.Value{ .Int = if (str) |s| std.fmt.parseInt(i16, s, 10) catch unreachable else null },
-            .int4 => p.Value{ .Int = if (str) |s| std.fmt.parseInt(i32, s, 10) catch unreachable else null },
-            .int8 => p.Value{ .Int = if (str) |s| std.fmt.parseInt(i64, s, 10) catch unreachable else null },
-            .float4 => p.Value{ .Double = if (str) |s| std.fmt.parseFloat(f32, s) catch unreachable else null },
-            .float8 => p.Value{ .Double = if (str) |s| std.fmt.parseFloat(f64, s) catch unreachable else null },
+            .int2, .int4, .int8 => p.Value{ .Int = if (str) |s| std.fmt.parseInt(i64, s, 10) catch unreachable else null },
+            .numeric, .float4, .float8 => p.Value{ .Double = if (str) |s| std.fmt.parseFloat(f64, s) catch unreachable else null },
             .text => p.Value{ .Bytes = if (str) |s| allocator.dupe(u8, s) catch unreachable else null },
             .timestamp, .date, .timetz, .timestamptz => p.Value{ .TimeStamp = p.Timestamp.fromString(str) catch unreachable },
             else => p.Value{ .Bytes = if (str) |s| allocator.dupe(u8, s) catch unreachable else null },
