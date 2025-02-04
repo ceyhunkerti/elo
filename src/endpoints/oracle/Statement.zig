@@ -78,12 +78,15 @@ pub fn fetch(self: *Statement, column_count: u32) !?p.Record {
         var value: p.Value = undefined;
         switch (native_type_num) {
             c.DPI_NATIVE_TYPE_BYTES => {
+                const ptr = c.dpiData_getBytes(@ptrCast(data));
                 value = .{
                     .Bytes = if (data.?.isNull != 0) null else try self.allocator.dupe(
                         u8,
-                        std.mem.span(data.?.value.asBytes.ptr),
+                        ptr.*.ptr[0..ptr.*.length],
                     ),
                 };
+                if (value.Bytes) |bytes|
+                    std.debug.print("V: {any} {s}\n", .{ value, bytes });
             },
             c.DPI_NATIVE_TYPE_FLOAT, c.DPI_NATIVE_TYPE_DOUBLE => {
                 value = .{ .Double = if (data.?.isNull != 0) null else data.?.value.asDouble };

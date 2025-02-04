@@ -31,6 +31,7 @@ pub const ColumnTypeInfo = struct {
             };
         } else {
             // todo
+            std.debug.print("Unsupported type: {s}\n", .{name});
             unreachable;
         }
     }
@@ -57,6 +58,7 @@ pub fn getTableMetadata(allocator: std.mem.Allocator, conn: *Connection, table_n
     ,
         .{ table.tablename, table.schema },
     );
+    std.debug.print("{s}\n", .{sql});
     defer allocator.free(sql);
     var stmt = try conn.prepareStatement(sql);
     const column_count = try stmt.execute();
