@@ -38,7 +38,7 @@ pub const Privilege = enum {
                     return @field(Privilege, field.name);
                 }
             }
-            return error.UnknownPrivilegeMode;
+            return error.Fail;
         } else {
             return Privilege.DEFAULT;
         }
