@@ -3,8 +3,11 @@ const Allocator = std.mem.Allocator;
 const builtin = @import("builtin");
 const assert = std.debug.assert;
 const testing = std.testing;
+
 const p = @import("proto/proto.zig");
-const M = @import("M.zig");
+const Metadata = p.Metadata;
+const Record = p.Record;
+const Value = p.Value;
 
 pub fn AtomicBlockingQueue(comptime T: type) type {
     return struct {
@@ -77,8 +80,8 @@ pub fn AtomicBlockingQueue(comptime T: type) type {
 }
 
 pub const Datum = union(enum) {
-    Metadata: p.Metadata,
-    Record: p.Record,
+    Metadata: Metadata,
+    Record: Record,
     Nil,
 
     pub fn deinit(self: *Datum, allocator: Allocator) void {
@@ -116,7 +119,7 @@ test "Wire" {
 
     while (true) {
         const message = wire.get();
-        defer M.deinit(allocator, message);
+        defer MessageFactory.destroy(allocator, message);
         switch (message.data) {
             .Metadata => |_| {},
             .Record => |record| {
@@ -138,7 +141,27 @@ test "MessageQueue sync" {
     wire.put(record.asMessage(allocator) catch unreachable);
 
     const mr = wire.get();
-    defer M.deinit(allocator, mr);
+    defer MessageFactory.destroy(allocator, mr);
 
     try testing.expectEqual(1, mr.data.Record.get(0).Int);
 }
+
+pub const MessageFactory = struct {
+    pub fn new(allocator: Allocator, val: anytype) !*Message {
+        const message = try allocator.create(Message);
+        message.* = .{
+            .data = switch (@TypeOf(val)) {
+                p.Metadata => .{ .Metadata = val },
+                p.Record => .{ .Record = val },
+                else => .Nil,
+            },
+        };
+        return message;
+    }
+    pub fn destroy(allocator: Allocator, message: *Message) void {
+        if (message.data != .Nil) {
+            message.data.deinit(allocator);
+        }
+        allocator.destroy(message);
+    }
+};

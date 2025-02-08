@@ -7,7 +7,13 @@ const Copy = @import("../Copy.zig");
 
 const c = @import("../c.zig").c;
 const t = @import("../testing/testing.zig");
-const b = @import("base");
+const base = @import("base");
+const Wire = base.Wire;
+const MessageFactory = base.MessageFactory;
+const RecordFormatter = base.RecordFormatter;
+const Record = base.Record;
+const Value = base.Value;
+const Term = base.Term;
 
 allocator: std.mem.Allocator,
 conn: Connection = undefined,
@@ -34,9 +40,9 @@ pub fn deinit(self: *Writer) void {
     self.conn.deinit();
 }
 
-fn getRecordFormatter(self: Writer) b.RecordFormatter {
+fn getRecordFormatter(self: Writer) RecordFormatter {
     const options = self.options;
-    var record_formatter = b.RecordFormatter{};
+    var record_formatter = RecordFormatter{};
     if (options.copy_options) |co| {
         if (co.delimiter) |delimiter| {
             record_formatter.delimiters.field_delimiter = if (delimiter[0] == '\'' and delimiter[delimiter.len - 1] == '\'')
@@ -48,14 +54,14 @@ fn getRecordFormatter(self: Writer) b.RecordFormatter {
     return record_formatter;
 }
 
-pub fn run(self: *Writer, wire: *b.Wire) !void {
+pub fn run(self: *Writer, wire: *Wire) !void {
     if (!self.conn.isConnected()) {
         try self.connect();
     }
     try self.write(wire);
 }
 
-pub fn write(self: *Writer, wire: *b.Wire) !void {
+pub fn write(self: *Writer, wire: *Wire) !void {
     const formatter = self.getRecordFormatter();
     var copy = Copy.init(
         self.allocator,
@@ -69,7 +75,7 @@ pub fn write(self: *Writer, wire: *b.Wire) !void {
 
     while (true) {
         const message = wire.get();
-        defer b.M.deinit(self.allocator, message);
+        defer MessageFactory.destroy(self.allocator, message);
         switch (message.data) {
             .Metadata => {},
             .Record => |*record| {
@@ -105,12 +111,12 @@ test "Writer.run" {
     try writer.connect();
     writer.conn.execute("CREATE TABLE IF NOT EXISTS TEST_WRITER_RUN_01 (ID INT not null, NAME VARCHAR(50) not null)") catch unreachable;
 
-    var wire = b.Wire.init();
+    var wire = Wire.init();
 
     // first record
-    const r1 = b.Record.fromSlice(
+    const r1 = Record.fromSlice(
         allocator,
-        &[_]b.Value{
+        &[_]Value{
             .{ .Int = 1 }, //id
             .{ .Bytes = try allocator.dupe(u8, "John") }, //name
         },
@@ -119,7 +125,7 @@ test "Writer.run" {
     wire.put(m1);
 
     // second record
-    const r2 = b.Record.fromSlice(allocator, &[_]b.Value{
+    const r2 = Record.fromSlice(allocator, &[_]Value{
         .{ .Int = 2 }, //id
         .{ .Bytes = try allocator.dupe(u8, "Jane") }, //name
     }) catch unreachable;
@@ -134,7 +140,7 @@ test "Writer.run" {
     // const m3 = record3.asMessage(allocator) catch unreachable;
     // wire.put(m3);
 
-    wire.put(b.Term(allocator));
+    wire.put(Term(allocator));
 
     try writer.run(&wire);
 }

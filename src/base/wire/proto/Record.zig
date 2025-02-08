@@ -3,10 +3,10 @@ const std = @import("std");
 
 const p = @import("proto.zig");
 const w = @import("../wire.zig");
-const M = @import("../M.zig");
 
 const Value = p.Value;
 const ValueDictionary = p.ValueDictionary;
+const MessageFactory = w.MessageFactory;
 
 values: std.ArrayList(Value) = undefined,
 
@@ -70,7 +70,7 @@ pub fn asMap(self: Record, allocator: std.mem.Allocator, names: []const []const 
 }
 
 pub fn asMessage(self: Record, allocator: std.mem.Allocator) !*w.Message {
-    return try M.new(allocator, self);
+    return try MessageFactory.new(allocator, self);
 }
 
 pub fn write(self: Record, result: *std.ArrayList(u8), formatter: p.RecordFormatter) !void {
