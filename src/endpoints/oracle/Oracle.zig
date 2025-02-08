@@ -4,8 +4,7 @@ pub const NAME = "oracle";
 
 const std = @import("std");
 
-const E = @import("../endpoint/endpoint.zig");
-const w = @import("../../wire/wire.zig");
+const app = @import("../../app.zig");
 const o = @import("options.zig");
 const io = @import("io/io.zig");
 
@@ -23,7 +22,7 @@ pub const Source = struct {
         self.reader.deinit();
     }
 
-    pub fn source(self: *Source) anyerror!?E.Source {
+    pub fn source(self: *Source) anyerror!?app.Source {
         return .{
             .ptr = self,
             .vtable = &.{
@@ -33,7 +32,7 @@ pub const Source = struct {
         };
     }
 
-    pub fn run(ctx: *anyopaque, wire: *w.Wire) anyerror!void {
+    pub fn run(ctx: *anyopaque, wire: *app.Wire) anyerror!void {
         const self: *Source = @ptrCast(@alignCast(ctx));
         try self.reader.run(wire);
     }
@@ -58,7 +57,7 @@ pub const Sink = struct {
         self.writer.deinit();
     }
 
-    pub fn sink(self: *Sink) anyerror!?E.Sink {
+    pub fn sink(self: *Sink) anyerror!?app.Sink {
         return .{
             .ptr = self,
             .vtable = &.{
@@ -68,7 +67,7 @@ pub const Sink = struct {
         };
     }
 
-    pub fn run(ctx: *anyopaque, wire: *w.Wire) anyerror!void {
+    pub fn run(ctx: *anyopaque, wire: *app.Wire) anyerror!void {
         const self: *Sink = @ptrCast(@alignCast(ctx));
         try self.writer.run(wire);
     }
@@ -100,7 +99,7 @@ pub fn deinit(self: *Oracle) void {
     }
 }
 
-pub fn endpoint(self: *Oracle) E.Endpoint {
+pub fn endpoint(self: *Oracle) app.Endpoint {
     return .{
         .ptr = self,
         .vtable = &.{
@@ -116,13 +115,13 @@ pub fn help(_: *anyopaque) anyerror![]const u8 {
     return "";
 }
 
-pub fn source(ctx: *anyopaque, options: std.StringHashMap([]const u8)) anyerror!?E.Source {
+pub fn source(ctx: *anyopaque, options: std.StringHashMap([]const u8)) anyerror!?app.Source {
     const self: *Oracle = @ptrCast(@alignCast(ctx));
     self._source = Source.init(self.allocator, try o.SourceOptions.fromStringMap(self.allocator, options));
     return self._source.?.source();
 }
 
-pub fn sink(ctx: *anyopaque, options: std.StringHashMap([]const u8)) anyerror!?E.Sink {
+pub fn sink(ctx: *anyopaque, options: std.StringHashMap([]const u8)) anyerror!?app.Sink {
     const self: *Oracle = @ptrCast(@alignCast(ctx));
     self._sink = Sink.init(self.allocator, try o.SinkOptions.fromStringMap(self.allocator, options));
     return self._sink.?.sink();

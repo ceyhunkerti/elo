@@ -4,8 +4,8 @@ const std = @import("std");
 const Connection = @import("../Connection.zig");
 const SourceOptions = @import("../options.zig").SourceOptions;
 
-const w = @import("../../../wire/wire.zig");
-const M = @import("../../../wire/M.zig");
+const app = @import("../../../app.zig");
+const M = app.M;
 const t = @import("../testing/testing.zig");
 
 allocator: std.mem.Allocator,
@@ -44,21 +44,21 @@ pub fn connect(self: *Reader) !void {
     return try self.conn.connect();
 }
 
-pub fn run(self: *Reader, wire: *w.Wire) !void {
+pub fn run(self: *Reader, wire: *app.Wire) !void {
     if (!self.conn.isConnected()) {
         try self.connect();
     }
     try self.read(wire);
 }
 
-pub fn read(self: *Reader, wire: *w.Wire) !void {
+pub fn read(self: *Reader, wire: *app.Wire) !void {
     var stmt = try self.conn.prepareStatement(self.options.sql);
     const column_count = try stmt.execute();
     while (true) {
         const record = try stmt.fetch(column_count) orelse break;
         wire.put(try record.asMessage(self.allocator));
     }
-    wire.put(w.Term(self.allocator));
+    wire.put(app.Term(self.allocator));
 }
 
 test "Reader.read" {
@@ -79,7 +79,7 @@ test "Reader.read" {
     var reader = Reader.init(allocator, options);
     defer reader.deinit();
     try reader.connect();
-    var wire = w.Wire.init();
+    var wire = app.Wire.init();
     try reader.read(&wire);
 
     var message_count: usize = 0;
