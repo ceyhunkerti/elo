@@ -41,7 +41,9 @@ pub fn initAndConnect(allocator: std.mem.Allocator, options: SinkOptions) !Write
     return writer;
 }
 
-pub fn help(_: Writer) ![]const u8 {}
+pub fn help(_: Writer) ![]const u8 {
+    return "";
+}
 
 pub fn deinit(self: *Writer) void {
     self.conn.deinit();
