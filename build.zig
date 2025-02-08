@@ -33,6 +33,11 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
 
+    const base = b.addModule("base", .{
+        .root_source_file = b.path("src/base/base.zig"),
+    });
+    exe.root_module.addImport("base", base);
+
     const argz = b.dependency("argz", .{
         .target = target,
         .optimize = optimize,
@@ -78,6 +83,7 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     tests.root_module.addImport("argz", argz.module("argz"));
+    tests.root_module.addImport("base", base);
 
     deps.setupOracle(tests);
     deps.setupPostgres(tests);

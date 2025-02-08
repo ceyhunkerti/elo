@@ -6,7 +6,7 @@ const Connection = @import("Connection.zig");
 const md = @import("metadata/metadata.zig");
 const Column = md.Column;
 
-const p = @import("../../wire/proto/proto.zig");
+const b = @import("base");
 const c = @import("c.zig").c;
 const e = @import("error.zig");
 
@@ -145,13 +145,13 @@ pub fn execute(self: *Cursor) !u32 {
     return self.row_count;
 }
 
-pub inline fn fetchNext(self: *Cursor) !?p.Record {
+pub inline fn fetchNext(self: *Cursor) !?b.Record {
     if (self.row_index >= self.row_count) return null;
-    var record = try p.Record.init(self.allocator, self.metadata.columns.len);
+    var record = try b.Record.init(self.allocator, self.metadata.columns.len);
     for (self.metadata.columns) |column| {
         const is_null = c.PQgetisnull(self.pg_result, @intCast(self.row_index), @intCast(column.index));
         const str = if (is_null != 1) std.mem.span(c.PQgetvalue(self.pg_result, @intCast(self.row_index), @intCast(column.index))) else null;
-        const val: p.Value = column.type_info.?.ext.?.stringToValue(self.allocator, str);
+        const val: b.Value = column.type_info.?.ext.?.stringToValue(self.allocator, str);
         try record.append(val);
     }
     self.row_index += 1;

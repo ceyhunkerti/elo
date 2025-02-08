@@ -1,8 +1,6 @@
 const std = @import("std");
 const cli = @import("cli.zig");
 
-pub const wire = @import("wire/wire.zig");
-pub const proto = @import("wire/proto/proto.zig");
 pub const endpoints = @import("endpoints/endpoints.zig");
 
 pub fn main() !void {
@@ -18,4 +16,5 @@ pub fn main() !void {
 
 test {
     std.testing.refAllDecls(@This());
+    _ = @import("base");
 }

@@ -6,9 +6,7 @@ const Cursor = @import("../Cursor.zig");
 const SourceOptions = @import("../options.zig").SourceOptions;
 
 const c = @import("../c.zig").c;
-const p = @import("../../../wire/proto/proto.zig");
-const w = @import("../../../wire/wire.zig");
-const M = @import("../../../wire/M.zig");
+const b = @import("base");
 
 const t = @import("../testing/testing.zig");
 
@@ -37,7 +35,7 @@ pub fn connect(self: *Reader) !void {
     try self.conn.connect();
 }
 
-pub fn run(self: *Reader, wire: *w.Wire) !void {
+pub fn run(self: *Reader, wire: *b.Wire) !void {
     if (!self.conn.isConnected()) {
         try self.connect();
     }
@@ -54,10 +52,10 @@ pub fn run(self: *Reader, wire: *w.Wire) !void {
     }
 
     try self.read(wire, &cursor);
-    wire.put(w.Term(self.allocator));
+    wire.put(b.Term(self.allocator));
 }
 
-fn read(self: *Reader, wire: *w.Wire, cursor: *Cursor) !void {
+fn read(self: *Reader, wire: *b.Wire, cursor: *Cursor) !void {
     while (true) {
         const row_count = try cursor.execute();
         if (row_count == 0) break;
@@ -90,11 +88,11 @@ test "Reader.run" {
     defer reader.deinit();
 
     try reader.connect();
-    var wire = w.Wire.init();
+    var wire = b.Wire.init();
     try reader.run(&wire);
 
     const message = wire.get();
-    defer M.deinit(allocator, message);
+    defer b.M.deinit(allocator, message);
 
     const record = message.data.Record;
 
@@ -125,6 +123,6 @@ test "Reader.run" {
     try std.testing.expectEqual(ts2.nanosecond, 123456000);
 
     const term = wire.get();
-    defer M.deinit(allocator, term);
+    defer b.M.deinit(allocator, term);
     try std.testing.expectEqual(term.data, .Nil);
 }

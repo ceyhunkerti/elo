@@ -1,4 +1,3 @@
-pub const Endpoint = @This();
 pub const std = @import("std");
 
 pub const oracle = @import("oracle/oracle.zig");

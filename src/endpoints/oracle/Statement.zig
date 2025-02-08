@@ -4,7 +4,7 @@ const std = @import("std");
 const Connection = @import("Connection.zig");
 
 const c = @import("c.zig").c;
-const p = @import("../../wire/proto/proto.zig");
+const b = @import("base");
 const e = @import("error.zig");
 const t = @import("testing/testing.zig");
 
@@ -57,7 +57,7 @@ pub fn execute(self: *Statement) !u32 {
     return column_count;
 }
 
-pub fn fetch(self: *Statement, column_count: u32) !?p.Record {
+pub fn fetch(self: *Statement, column_count: u32) !?b.Record {
     var buffer_row_index: u32 = 0;
     var native_type_num: c.dpiNativeTypeNum = 0;
     var found: c_int = 0;
@@ -68,14 +68,14 @@ pub fn fetch(self: *Statement, column_count: u32) !?p.Record {
     if (found == 0) {
         return null;
     }
-    var record = try p.Record.init(self.allocator, column_count);
+    var record = try b.Record.init(self.allocator, column_count);
 
     for (1..column_count + 1) |i| {
         var data: ?*c.dpiData = undefined;
         if (c.dpiStmt_getQueryValue(self.dpi_stmt, @intCast(i), &native_type_num, &data) < 0) {
             return error.Fail;
         }
-        var value: p.Value = undefined;
+        var value: b.Value = undefined;
         switch (native_type_num) {
             c.DPI_NATIVE_TYPE_BYTES => {
                 const ptr = c.dpiData_getBytes(@ptrCast(data));

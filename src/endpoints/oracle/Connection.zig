@@ -7,7 +7,6 @@ const Statement = @import("Statement.zig");
 
 const t = @import("testing/testing.zig");
 const c = @import("c.zig").c;
-const p = @import("../../wire/proto/proto.zig");
 
 pub const Privilege = enum {
     SYSDBA,

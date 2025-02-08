@@ -1,6 +1,6 @@
 const Endpoint = @This();
 const std = @import("std");
-const w = @import("../../wire/wire.zig");
+const w = @import("../wire/wire.zig");
 const StringMap = std.StringHashMap([]const u8);
 const Sink = @import("Sink.zig");
 const Source = @import("Source.zig");
