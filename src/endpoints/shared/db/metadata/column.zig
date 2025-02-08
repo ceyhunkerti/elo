@@ -1,14 +1,14 @@
 const std = @import("std");
-const p = @import("../../../../wire/proto/proto.zig");
+const b = @import("base");
 
 pub fn TypeInfo(comptime T: type) type {
     return struct {
-        field_type: p.FieldType = undefined,
+        field_type: b.FieldType = undefined,
         size: ?u32 = null,
         precision: ?u32 = null,
         scale: ?u32 = null,
         nullable: ?bool = null,
-        default: ?p.Value = null,
+        default: ?b.Value = null,
 
         ext: ?T = null,
 

@@ -10,3 +10,11 @@ pub const Wire = w.Wire;
 pub const Term = w.Term;
 pub const M = @import("wire/M.zig");
 pub const Message = w.Message;
+
+// proto
+pub const p = @import("wire/proto/proto.zig");
+pub const Record = p.Record;
+pub const Value = p.Value;
+pub const RecordFormatter = p.RecordFormatter;
+pub const FieldType = p.FieldType;
+pub const Timestamp = p.Timestamp;

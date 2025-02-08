@@ -1,6 +1,6 @@
 const std = @import("std");
 const c = @import("../c.zig").c;
-const p = @import("../../../wire/proto/proto.zig");
+const b = @import("base");
 
 const Error = error{invalidFormat};
 
@@ -103,13 +103,13 @@ pub const PostgresType = enum(c.Oid) {
         };
     }
 
-    pub inline fn stringToValue(self: PostgresType, allocator: std.mem.Allocator, str: ?[]const u8) p.Value {
+    pub inline fn stringToValue(self: PostgresType, allocator: std.mem.Allocator, str: ?[]const u8) b.Value {
         return switch (self) {
-            .bool => p.Value{ .Boolean = if (str) |s| std.mem.eql(u8, s, "t") else null },
-            .int2, .int4, .int8 => p.Value{ .Int = if (str) |s| std.fmt.parseInt(i64, s, 10) catch unreachable else null },
-            .numeric, .float4, .float8 => p.Value{ .Double = if (str) |s| std.fmt.parseFloat(f64, s) catch unreachable else null },
-            .varchar, .text => p.Value{ .Bytes = if (str) |s| allocator.dupe(u8, s) catch unreachable else null },
-            .timestamp, .date, .timetz, .timestamptz => p.Value{ .TimeStamp = p.Timestamp.fromString(str) catch unreachable },
+            .bool => b.Value{ .Boolean = if (str) |s| std.mem.eql(u8, s, "t") else null },
+            .int2, .int4, .int8 => b.Value{ .Int = if (str) |s| std.fmt.parseInt(i64, s, 10) catch unreachable else null },
+            .numeric, .float4, .float8 => b.Value{ .Double = if (str) |s| std.fmt.parseFloat(f64, s) catch unreachable else null },
+            .varchar, .text => b.Value{ .Bytes = if (str) |s| allocator.dupe(u8, s) catch unreachable else null },
+            .timestamp, .date, .timetz, .timestamptz => b.Value{ .TimeStamp = b.Timestamp.fromString(str) catch unreachable },
             else => {
                 std.debug.print("Unsupported type: {}\n", .{self});
                 unreachable;
@@ -118,12 +118,12 @@ pub const PostgresType = enum(c.Oid) {
     }
 };
 
-pub fn timestampFromString(str: ?[]const u8) !?p.Timestamp {
+pub fn timestampFromString(str: ?[]const u8) !?b.Timestamp {
     if (str == null) return null;
     const input = std.mem.trim(u8, str.?, &std.ascii.whitespace);
     if (input.len == 0) return null;
 
-    var result = p.Timestamp{
+    var result = b.Timestamp{
         .year = 0,
         .month = 1,
         .day = 1,
@@ -151,7 +151,7 @@ pub fn timestampFromString(str: ?[]const u8) !?p.Timestamp {
     return result;
 }
 
-fn parseDatePart(input: []const u8, result: *p.Timestamp) !void {
+fn parseDatePart(input: []const u8, result: *b.Timestamp) !void {
     if (input.len < 10) return error.InvalidFormat;
 
     result.year = try std.fmt.parseInt(i16, input[0..4], 10);
@@ -165,7 +165,7 @@ fn parseDatePart(input: []const u8, result: *p.Timestamp) !void {
     if (result.day < 1 or result.day > 31) return error.InvalidDay;
 }
 
-fn parseTimePart(input: []const u8, result: *p.Timestamp) !void {
+fn parseTimePart(input: []const u8, result: *b.Timestamp) !void {
     if (input.len < 8) return error.InvalidFormat;
 
     result.hour = try std.fmt.parseInt(u8, input[0..2], 10);

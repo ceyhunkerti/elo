@@ -1,6 +1,6 @@
 const Reader = @This();
 const std = @import("std");
-const w = @import("../../wire/wire.zig");
+const w = @import("../wire/wire.zig");
 
 ptr: *anyopaque,
 vtable: *const VTable,

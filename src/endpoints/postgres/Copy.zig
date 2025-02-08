@@ -2,7 +2,7 @@ const Copy = @This();
 
 const std = @import("std");
 const c = @import("c.zig").c;
-const p = @import("../../wire/proto/proto.zig");
+const b = @import("base");
 const Connection = @import("Connection.zig");
 
 pub const Options = struct {
@@ -139,7 +139,7 @@ pub fn flush(self: Copy) !void {
     self.data.deinit();
 }
 
-pub fn copy(self: *Copy, record: *p.Record, formatter: p.RecordFormatter) !void {
+pub fn copy(self: *Copy, record: *b.Record, formatter: b.RecordFormatter) !void {
     if (self.data.items.len > 0) {
         try self.data.appendSlice("\n");
     }

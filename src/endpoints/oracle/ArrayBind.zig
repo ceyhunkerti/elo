@@ -5,8 +5,8 @@ const Statement = @import("Statement.zig");
 const Connection = @import("Connection.zig");
 const md = @import("metadata/metadata.zig");
 const c = @import("c.zig").c;
-const p = @import("../../wire/proto/proto.zig");
 const e = @import("error.zig");
+const b = @import("base");
 
 allocator: std.mem.Allocator = undefined,
 stmt: *Statement = undefined,
@@ -69,7 +69,7 @@ pub fn deinit(self: *ArrayBind) void {
     if (self.dpi_data_array) |arr| self.allocator.free(arr);
 }
 
-pub fn add(self: *ArrayBind, index: u32, record: *p.Record) !void {
+pub fn add(self: *ArrayBind, index: u32, record: *b.Record) !void {
     for (record.items(), 0..) |column, ci| {
         switch (column) {
             .Int => |val| {
