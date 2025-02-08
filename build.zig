@@ -33,6 +33,12 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
 
+    const argz = b.dependency("argz", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    exe.root_module.addImport("argz", argz.module("argz"));
+
     deps.setupOracle(exe);
     deps.setupPostgres(exe);
 
@@ -71,6 +77,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
+    tests.root_module.addImport("argz", argz.module("argz"));
 
     deps.setupOracle(tests);
     deps.setupPostgres(tests);

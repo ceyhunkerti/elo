@@ -38,7 +38,7 @@ pub const Privilege = enum {
                     return @field(Privilege, field.name);
                 }
             }
-            return error.UnknownPrivilegeMode;
+            return error.Fail;
         } else {
             return Privilege.DEFAULT;
         }
@@ -75,6 +75,7 @@ pub fn deinit(self: *Connection) void {
             std.debug.print("Failed to release connection with error: {s}\n", .{self.context.errorMessage()});
             unreachable;
         }
+        self.dpi_conn = null;
     }
 }
 
