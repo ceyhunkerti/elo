@@ -92,6 +92,8 @@ pub const SourceOptions = struct {
             .sql = sql,
         };
     }
+
+    pub fn deinit(_: SourceOptions) void {}
 };
 
 test "SourceOptions.fromStringMap" {
@@ -159,6 +161,8 @@ pub const SinkOptions = struct {
             .batch_size = batch_size,
         };
     }
+
+    pub fn deinit(_: SinkOptions) void {}
 };
 
 test "SinkOptions.fromStringMap" {

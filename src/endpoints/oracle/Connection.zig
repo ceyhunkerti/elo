@@ -75,6 +75,7 @@ pub fn deinit(self: *Connection) void {
             std.debug.print("Failed to release connection with error: {s}\n", .{self.context.errorMessage()});
             unreachable;
         }
+        self.dpi_conn = null;
     }
 }
 

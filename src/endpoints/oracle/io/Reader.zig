@@ -36,6 +36,10 @@ pub fn deinit(self: *Reader) void {
     self.conn.deinit();
 }
 
+pub fn help(_: Reader) ![]const u8 {
+    return "";
+}
+
 pub fn connect(self: *Reader) !void {
     return try self.conn.connect();
 }
