@@ -6,7 +6,13 @@ const Statement = @import("../Statement.zig");
 const SinkOptions = @import("../options.zig").SinkOptions;
 const ArrayBind = @import("../ArrayBind.zig");
 
-const b = @import("base");
+const base = @import("base");
+const Wire = base.Wire;
+const MessageFactory = base.MessageFactory;
+const Record = base.Record;
+const Value = base.Value;
+const Term = base.Term;
+
 const md = @import("../metadata/metadata.zig");
 const c = @import("../c.zig").c;
 const t = @import("../testing/testing.zig");
@@ -102,7 +108,7 @@ test "Writer.prepare" {
 
 test "Writer.write .Append" {}
 
-pub fn write(self: *Writer, wire: *b.Wire) !void {
+pub fn write(self: *Writer, wire: *Wire) !void {
     var ab = try ArrayBind.init(self.allocator, &self.stmt, self.table.?.columns, self.options.batch_size);
     defer ab.deinit();
 
@@ -110,7 +116,7 @@ pub fn write(self: *Writer, wire: *b.Wire) !void {
 
     while (true) {
         const message = wire.get();
-        defer b.M.deinit(self.allocator, message);
+        defer MessageFactory.destroy(self.allocator, message);
         switch (message.data) {
             .Metadata => {},
             .Record => |*record| {
@@ -171,12 +177,12 @@ test "Writer.write" {
     try writer.prepare();
     try std.testing.expectEqual(5, writer.table.?.columnCount());
 
-    var wire = b.Wire.init();
+    var wire = Wire.init();
 
     // first record
-    const r1 = b.Record.fromSlice(
+    const r1 = Record.fromSlice(
         allocator,
-        &[_]b.Value{
+        &[_]Value{
             .{ .Int = 1 }, //id
             .{ .Bytes = try allocator.dupe(u8, "John") }, //name
             .{ .Int = 20 }, //age
@@ -197,7 +203,7 @@ test "Writer.write" {
     wire.put(m1);
 
     // second record
-    const r2 = b.Record.fromSlice(allocator, &[_]b.Value{
+    const r2 = Record.fromSlice(allocator, &[_]Value{
         .{ .Int = 2 }, //id
         .{ .Bytes = try allocator.dupe(u8, "Jane") }, //name
         .{ .Int = 21 }, //age
@@ -217,7 +223,7 @@ test "Writer.write" {
     wire.put(m2);
 
     // third record with unicode
-    const record3 = b.Record.fromSlice(allocator, &[_]b.Value{
+    const record3 = Record.fromSlice(allocator, &[_]Value{
         .{ .Int = 3 }, //id
         .{ .Bytes = try allocator.dupe(u8, "Έ Ή") }, //name
         .{ .Int = 22 }, //age
@@ -236,7 +242,7 @@ test "Writer.write" {
     const m3 = record3.asMessage(allocator) catch unreachable;
     wire.put(m3);
 
-    wire.put(b.Term(allocator));
+    wire.put(Term(allocator));
 
     try writer.write(&wire);
     const check_query = try std.fmt.allocPrint(
@@ -286,7 +292,7 @@ fn writeBatch(self: *Writer, size: u32) !void {
     self.batch_index += size;
 }
 
-pub fn run(self: *Writer, wire: *b.Wire) !void {
+pub fn run(self: *Writer, wire: *Wire) !void {
     if (!self.conn.isConnected()) {
         try self.connect();
     }

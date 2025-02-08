@@ -8,8 +8,8 @@ pub const Sink = endpoint.Sink;
 pub const w = @import("wire/wire.zig");
 pub const Wire = w.Wire;
 pub const Term = w.Term;
-pub const M = @import("wire/M.zig");
 pub const Message = w.Message;
+pub const MessageFactory = w.MessageFactory;
 
 // proto
 pub const p = @import("wire/proto/proto.zig");

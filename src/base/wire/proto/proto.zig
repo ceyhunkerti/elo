@@ -1,6 +1,5 @@
 const std = @import("std");
 const w = @import("../wire.zig");
-const M = @import("../M.zig");
 
 const StringHashMap = std.StringHashMap;
 const Error = error{
