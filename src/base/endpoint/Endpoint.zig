@@ -32,3 +32,7 @@ pub fn sink(self: *Endpoint, options: StringMap) anyerror!?Sink {
     }
     return null;
 }
+
+pub fn help(self: *Endpoint) anyerror![]const u8 {
+    return self.vtable.help(self.ptr);
+}

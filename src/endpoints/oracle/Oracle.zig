@@ -111,8 +111,15 @@ pub fn endpoint(self: *Oracle) b.Endpoint {
     };
 }
 
-pub fn help(_: *anyopaque) anyerror![]const u8 {
-    return "";
+pub fn help(ctx: *anyopaque) anyerror![]const u8 {
+    const self: *Oracle = @ptrCast(@alignCast(ctx));
+
+    const result =
+        \\Name: oracle
+        \\Description: Oracle database endpoint.
+        \\Supports: Source, Sink
+    ;
+    return try self.allocator.dupe(u8, result);
 }
 
 pub fn source(ctx: *anyopaque, options: std.StringHashMap([]const u8)) anyerror!?b.Source {

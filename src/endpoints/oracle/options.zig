@@ -42,6 +42,21 @@ pub const ConnectionOptions = struct {
             .privilege = privilege,
         };
     }
+
+    pub fn help(output: *std.ArrayList(u8)) !void {
+        try output.appendSlice(
+            \\--connection-string [REQUIRED]
+            \\  Oracle connection string  <host>:<port>/<SID|SERVICE_NAME|PDB>
+            \\  Example: somedb99.example.com:1234/orclpdb
+            \\
+            \\--username [REQUIRED]
+            \\
+            \\--password [REQUIRED]
+            \\
+            \\--privilege [OPTIONAL]
+            \\  Oracle privilege  SYSDBA|SYSOPER|...|DEFAULT
+        );
+    }
 };
 test "ConnectionOptions.fromStringMap" {
     const allocator = std.testing.allocator;
@@ -93,7 +108,21 @@ pub const SourceOptions = struct {
         };
     }
 
-    pub fn deinit(_: SourceOptions) void {}
+    pub fn deinit(self: SourceOptions) void {
+        self.connection.deinit();
+    }
+
+    pub fn help(output: *std.ArrayList(u8)) !void {
+        try ConnectionOptions.help(output);
+
+        try output.appendSlice(
+            \\--sql [REQUIRED]
+            \\  SQL query to execute
+            \\
+            \\--fetch-size [OPTIONAL]
+            \\  Fetch size for the query defaults to 10_000
+        );
+    }
 };
 
 test "SourceOptions.fromStringMap" {
@@ -163,6 +192,23 @@ pub const SinkOptions = struct {
     }
 
     pub fn deinit(_: SinkOptions) void {}
+
+    pub fn help(output: *std.ArrayList(u8)) !void {
+        try ConnectionOptions.help(output);
+
+        try output.appendSlice(
+            \\--table [REQUIRED]
+            \\  Table to write
+            \\
+            \\--mode [OPTIONAL]
+            \\  Mode to write to defaults to Append
+            \\  Possible values are: Append, Truncate
+            \\
+            \\--batch-size [OPTIONAL]
+            \\  Batch size for the query defaults to 10_000
+            \\
+        );
+    }
 };
 
 test "SinkOptions.fromStringMap" {
