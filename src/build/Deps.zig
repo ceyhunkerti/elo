@@ -16,6 +16,8 @@ pub fn setupOracle(self: Deps, step: *Step.Compile) void {
         .file = self.b.path("lib/oracle/odpi-5.4.1/embed/dpi.c"),
     });
     step.addIncludePath(self.b.path("lib/oracle/odpi-5.4.1/include"));
+
+    step.addIncludePath(self.b.path("lib/oracle/oci/include"));
 }
 
 pub fn setupPostgres(_: Deps, step: *Step.Compile) void {
