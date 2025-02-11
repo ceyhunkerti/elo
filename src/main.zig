@@ -1,7 +1,7 @@
 const std = @import("std");
 const cli = @import("cli.zig");
-
-pub const endpoints = @import("endpoints/endpoints.zig");
+const base = @import("base");
+const EndpointRegistry = base.EndpointRegistry;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -11,7 +11,25 @@ pub fn main() !void {
     }
     const allocator = gpa.allocator();
 
-    try cli.init(allocator);
+    var registry = EndpointRegistry.init(allocator);
+    try register(&registry);
+    defer registry.deinit();
+
+    const cmd = try cli.init(allocator);
+    defer {
+        cmd.deinit();
+    }
+
+    var params = cli.Params{ .registry = &registry };
+    try cmd.parse();
+
+    _ = try cmd.run(&params);
+}
+
+pub fn register(registry: *EndpointRegistry) !void {
+    const oracle = @import("endpoints/oracle/oracle.zig");
+
+    try oracle.register(registry);
 }
 
 test {

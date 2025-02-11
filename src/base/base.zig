@@ -1,6 +1,6 @@
 // endpoints
 pub const endpoint = @import("endpoint/endpoint.zig");
-pub const Endpoint = endpoint.Endpoint;
+pub const EndpointRegistry = endpoint.Registry;
 pub const Source = endpoint.Source;
 pub const Sink = endpoint.Sink;
 

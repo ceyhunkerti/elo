@@ -1,34 +1,36 @@
 const std = @import("std");
-const testing = std.testing;
+const Source = @import("Source.zig");
+const Sink = @import("Sink.zig");
+const base = @import("base");
+const EndpointRegistry = base.EndpointRegistry;
+const constants = @import("constants.zig");
 
-pub const Oracle = @import("Oracle.zig");
-const StringMap = std.StringHashMap([]const u8);
-
-test {
-    testing.refAllDecls(@This());
+pub fn source(allocator: std.mem.Allocator) !base.Source {
+    const s = try allocator.create(Source);
+    s.* = Source.init(allocator);
+    return s.get();
 }
 
-// std.mem.Allocator
+pub fn sink(allocator: std.mem.Allocator) !base.Sink {
+    const s = try allocator.create(Sink);
+    s.* = Sink.init(allocator);
+    return s.get();
+}
 
-test "OracleEndpoint" {
+pub fn register(registry: *EndpointRegistry) !void {
+    try registry.sources.put(constants.NAME, try source(registry.allocator));
+    try registry.sinks.put(constants.NAME, try sink(registry.allocator));
+}
+
+test "source" {
     const allocator = std.testing.allocator;
-    var o = Oracle.init(allocator);
-    defer o.deinit();
+    var s = try source(allocator);
+    defer s.deinit();
+    const h = try s.help();
+    defer s.allocator.free(h);
+    try std.testing.expectEqualStrings("hello from reader", h);
+}
 
-    var endpoint = o.endpoint();
-    const endpoint_help =
-        \\Name: oracle
-        \\Description: Oracle database endpoint.
-        \\Supports: Source, Sink
-    ;
-
-    const endpoint_help_ = try endpoint.help();
-    defer allocator.free(endpoint_help_);
-    try testing.expectEqualStrings(endpoint_help, endpoint_help_);
-
-    // var options = StringMap.init(allocator);
-    // defer options.deinit();
-
-    // const source = try endpoint.source(options);
-    // _ = source;
+test {
+    std.testing.refAllDecls(@This());
 }
