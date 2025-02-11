@@ -39,8 +39,8 @@ pub fn deinit(self: *Reader) void {
     self.conn.deinit();
 }
 
-pub fn help(_: Reader) ![]const u8 {
-    return "";
+pub fn help(allocator: std.mem.Allocator) ![]const u8 {
+    return try allocator.dupe(u8, "hello from reader");
 }
 
 pub fn connect(self: *Reader) !void {

@@ -1,34 +1,29 @@
 const std = @import("std");
-const testing = std.testing;
+const Source = @import("Source.zig");
+const Sink = @import("Sink.zig");
+const base = @import("base");
 
-pub const Oracle = @import("Oracle.zig");
-const StringMap = std.StringHashMap([]const u8);
-
-test {
-    testing.refAllDecls(@This());
+pub fn source(allocator: std.mem.Allocator) base.Source {
+    const s = allocator.create(Source) catch unreachable;
+    s.* = Source.init(allocator);
+    return s.get();
 }
 
-// std.mem.Allocator
+pub fn sink(allocator: std.mem.Allocator) base.Sink {
+    const s = allocator.create(Sink) catch unreachable;
+    s.* = Sink.init(allocator);
+    return s.get();
+}
 
-test "OracleEndpoint" {
+test "source" {
     const allocator = std.testing.allocator;
-    var o = Oracle.init(allocator);
-    defer o.deinit();
+    var s = source(allocator);
+    defer s.deinit();
+    const h = try s.help();
+    defer s.allocator.free(h);
+    try std.testing.expectEqualStrings("hello from reader", h);
+}
 
-    var endpoint = o.endpoint();
-    const endpoint_help =
-        \\Name: oracle
-        \\Description: Oracle database endpoint.
-        \\Supports: Source, Sink
-    ;
-
-    const endpoint_help_ = try endpoint.help();
-    defer allocator.free(endpoint_help_);
-    try testing.expectEqualStrings(endpoint_help, endpoint_help_);
-
-    // var options = StringMap.init(allocator);
-    // defer options.deinit();
-
-    // const source = try endpoint.source(options);
-    // _ = source;
+test {
+    std.testing.refAllDecls(@This());
 }
