@@ -15,6 +15,15 @@ pub const Registry = struct {
     }
 
     pub fn deinit(self: *Registry) void {
+        var source_it = self.sources.keyIterator();
+        while (source_it.next()) |name| {
+            self.sources.getPtr(name.*).?.deinit();
+        }
+        var sink_it = self.sinks.keyIterator();
+        while (sink_it.next()) |name| {
+            self.sinks.getPtr(name.*).?.deinit();
+        }
+
         self.sources.deinit();
         self.sinks.deinit();
     }

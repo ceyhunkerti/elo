@@ -1,4 +1,4 @@
-const Writer = @This();
+const Sink = @This();
 const std = @import("std");
 const w = @import("../wire/wire.zig");
 
@@ -13,3 +13,11 @@ pub const VTable = struct {
     help: *const fn (ctx: *anyopaque) anyerror![]const u8,
     deinit: *const fn (ctx: *anyopaque) void,
 };
+
+pub fn help(self: Sink) anyerror![]const u8 {
+    return self.vtable.help(self.ptr);
+}
+
+pub fn deinit(self: Sink) void {
+    self.vtable.deinit(self.ptr);
+}

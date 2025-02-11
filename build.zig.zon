@@ -24,8 +24,8 @@
     // internet connectivity.
     .dependencies = .{
         .argz = .{
-            .url = "https://github.com/ceyhunkerti/argz/archive/refs/tags/v0.3.1.tar.gz",
-            .hash = "12209edc0f66e28bddf5f39b7158f1075b0998c1c0dc603fb46bc670c5daf81284c3",
+            .url = "https://github.com/ceyhunkerti/argz/archive/refs/tags/v0.3.2.tar.gz",
+            .hash = "1220219c089fe8f33b4da2f254a348419be15421942789c518e9d5aad135fd652940",
         },
     },
     .paths = .{

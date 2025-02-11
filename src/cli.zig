@@ -5,28 +5,28 @@ const Command = argz.Command;
 
 const EndpointRegistry = base.EndpointRegistry;
 
-pub fn init(allocator: std.mem.Allocator, registry: *EndpointRegistry) !void {
-    var root = argz.Command.init(allocator, "elo", null);
-    defer root.deinit();
-    var list = argz.Command.init(allocator, "list", null);
+pub const Params = struct {
+    registry: *EndpointRegistry,
+};
 
-    const Ctx = struct {
-        registry: *EndpointRegistry,
-    };
-    var ctx = Ctx{ .registry = registry };
+pub fn init(allocator: std.mem.Allocator) !*Command {
+    const root = Command.init(allocator, "elo", null);
 
-    var endpoints = argz.Command.init(allocator, "source-endpoints", struct {
+    const list = Command.init(allocator, "list", null);
+
+    const endpoints = Command.init(allocator, "source-endpoints", struct {
         fn run(_: *const Command, args: ?*anyopaque) anyerror!i32 {
-            const a: *Ctx = @ptrCast(@alignCast(args));
-            var it = a.registry.sources.keyIterator();
+            const params: *Params = @ptrCast(@alignCast(args));
+            var it = params.registry.sources.keyIterator();
+            std.debug.print("Source Endpoints:\n", .{});
             while (it.next()) |name| {
-                std.debug.print("{s}\n", .{name});
+                std.debug.print("- {s}\n", .{name.*});
             }
             return 0;
         }
     }.run);
-    try root.addCommand(&list);
-    try list.addCommand(&endpoints);
+    try root.addCommand(list);
+    try list.addCommand(endpoints);
 
-    _ = try root.run(&ctx);
+    return root;
 }

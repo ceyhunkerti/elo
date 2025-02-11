@@ -13,10 +13,17 @@ pub fn main() !void {
 
     var registry = EndpointRegistry.init(allocator);
     try register(&registry);
-
     defer registry.deinit();
 
-    try cli.init(allocator, &registry);
+    const cmd = try cli.init(allocator);
+    defer {
+        cmd.deinit();
+    }
+
+    var params = cli.Params{ .registry = &registry };
+    try cmd.parse();
+
+    _ = try cmd.run(&params);
 }
 
 pub fn register(registry: *EndpointRegistry) !void {
