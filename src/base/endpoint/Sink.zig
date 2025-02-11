@@ -3,6 +3,7 @@ const std = @import("std");
 const w = @import("../wire/wire.zig");
 
 allocator: std.mem.Allocator,
+name: []const u8,
 ptr: *anyopaque,
 vtable: *const VTable,
 

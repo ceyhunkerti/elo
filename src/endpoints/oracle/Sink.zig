@@ -8,6 +8,7 @@ const BaseSink = base.Sink;
 const io = @import("io/io.zig");
 const opts = @import("options.zig");
 const SinkOptions = opts.SinkOptions;
+const constants = @import("constants.zig");
 
 pub const Error = error{
     NotInitialized,
@@ -29,6 +30,7 @@ pub fn deinit(ctx: *anyopaque) void {
 pub fn get(self: *Sink) BaseSink {
     return .{
         .ptr = self,
+        .name = constants.NAME,
         .allocator = self.allocator,
         .vtable = &.{
             .prepare = prepare,

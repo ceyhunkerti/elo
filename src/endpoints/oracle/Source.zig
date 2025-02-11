@@ -9,6 +9,8 @@ const io = @import("io/io.zig");
 const opts = @import("options.zig");
 const SourceOptions = opts.SourceOptions;
 
+const constants = @import("constants.zig");
+
 pub const Error = error{
     NotInitialized,
     OptionsRequired,
@@ -29,6 +31,7 @@ pub fn deinit(ctx: *anyopaque) void {
 pub fn get(self: *Source) BaseSource {
     return .{
         .ptr = self,
+        .name = constants.NAME,
         .allocator = self.allocator,
         .vtable = &.{
             .prepare = prepare,

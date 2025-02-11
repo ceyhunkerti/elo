@@ -2,22 +2,29 @@ const std = @import("std");
 const Source = @import("Source.zig");
 const Sink = @import("Sink.zig");
 const base = @import("base");
+const EndpointRegistry = base.EndpointRegistry;
+const constants = @import("constants.zig");
 
-pub fn source(allocator: std.mem.Allocator) base.Source {
-    const s = allocator.create(Source) catch unreachable;
+pub fn source(allocator: std.mem.Allocator) !base.Source {
+    const s = try allocator.create(Source);
     s.* = Source.init(allocator);
     return s.get();
 }
 
-pub fn sink(allocator: std.mem.Allocator) base.Sink {
-    const s = allocator.create(Sink) catch unreachable;
+pub fn sink(allocator: std.mem.Allocator) !base.Sink {
+    const s = try allocator.create(Sink);
     s.* = Sink.init(allocator);
     return s.get();
 }
 
+pub fn register(registry: *EndpointRegistry) !void {
+    try registry.sources.put(constants.NAME, try source(registry.allocator));
+    try registry.sinks.put(constants.NAME, try sink(registry.allocator));
+}
+
 test "source" {
     const allocator = std.testing.allocator;
-    var s = source(allocator);
+    var s = try source(allocator);
     defer s.deinit();
     const h = try s.help();
     defer s.allocator.free(h);
