@@ -11,10 +11,15 @@ pub const Params = struct {
 
 pub fn init(allocator: std.mem.Allocator) !*Command {
     const root = Command.init(allocator, "elo", null);
+    try root.addCommand(try initList(allocator));
 
+    return root;
+}
+
+fn initList(allocator: std.mem.Allocator) !*Command {
     const list = Command.init(allocator, "list", null);
 
-    const endpoints = Command.init(allocator, "source-endpoints", struct {
+    const list_source_endpoints = Command.init(allocator, "source-endpoints", struct {
         fn run(_: *const Command, args: ?*anyopaque) anyerror!i32 {
             const params: *Params = @ptrCast(@alignCast(args));
             var it = params.registry.sources.keyIterator();
@@ -25,8 +30,7 @@ pub fn init(allocator: std.mem.Allocator) !*Command {
             return 0;
         }
     }.run);
-    try root.addCommand(list);
-    try list.addCommand(endpoints);
+    try list.addCommand(list_source_endpoints);
 
-    return root;
+    return list;
 }

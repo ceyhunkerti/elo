@@ -21,26 +21,26 @@ pub const ConnectionOptions = struct {
     password: []const u8,
     privilege: Privilege = .DEFAULT,
 
-    pub fn fromStringMap(map: StringMap) !ConnectionOptions {
-        const connection_string = map.get("connection-string") orelse {
-            return Error.ConnectionStringNotFound;
-        };
-        const username = map.get("username") orelse {
-            return Error.UsernameNotFound;
-        };
-        const password = map.get("password") orelse {
-            return Error.PasswordNotFound;
-        };
+    pub fn fromMap(allocator: std.mem.Allocator, map: StringMap) !ConnectionOptions {
+        const connection_string = map.get("connection-string") orelse return Error.ConnectionStringNotFound;
+        const username = map.get("username") orelse return Error.UsernameNotFound;
+        const password = map.get("password") orelse return Error.PasswordNotFound;
         const privilege = if (map.get("privilege")) |priv| Privilege.fromString(priv) catch {
             return Error.FailedToDetectPrivilege;
         } else Privilege.DEFAULT;
 
         return .{
-            .connection_string = connection_string,
-            .username = username,
-            .password = password,
+            .connection_string = try allocator.dupe(u8, connection_string),
+            .username = try allocator.dupe(u8, username),
+            .password = try allocator.dupe(u8, password),
             .privilege = privilege,
         };
+    }
+
+    pub fn deinit(self: ConnectionOptions, allocator: std.mem.Allocator) void {
+        allocator.free(self.connection_string);
+        allocator.free(self.username);
+        allocator.free(self.password);
     }
 
     pub fn help(output: *std.ArrayList(u8)) !void {
@@ -58,7 +58,7 @@ pub const ConnectionOptions = struct {
         );
     }
 };
-test "ConnectionOptions.fromStringMap" {
+test "ConnectionOptions.fromMap" {
     const allocator = std.testing.allocator;
     var map = StringMap.init(allocator);
     defer map.deinit();
@@ -66,7 +66,8 @@ test "ConnectionOptions.fromStringMap" {
     try map.put("username", "bar");
     try map.put("password", "baz");
     try map.put("privilege", "SYSDBA");
-    const opts = try ConnectionOptions.fromStringMap(map);
+    const opts = try ConnectionOptions.fromMap(allocator, map);
+    defer opts.deinit(allocator);
     try std.testing.expectEqualStrings("foo", opts.connection_string);
     try std.testing.expectEqualStrings("bar", opts.username);
     try std.testing.expectEqualStrings("baz", opts.password);
@@ -78,18 +79,8 @@ pub const SourceOptions = struct {
     fetch_size: u32 = 10_000,
     sql: []const u8,
 
-    pub fn fromStringMap(allocator: std.mem.Allocator, map: StringMap) !SourceOptions {
-        var conn_map = StringMap.init(allocator);
-        defer conn_map.deinit();
-        var it = map.iterator();
-        while (it.next()) |kv| {
-            if (std.mem.startsWith(u8, kv.key_ptr.*, "conn--")) {
-                try conn_map.put(kv.key_ptr.*[6..], kv.value_ptr.*);
-            }
-        }
-        const sql = map.get("sql") orelse {
-            return Error.SqlNotFound;
-        };
+    pub fn fromMap(allocator: std.mem.Allocator, map: StringMap) !SourceOptions {
+        const sql = map.get("sql") orelse return Error.SqlNotFound;
         const fetch_size = fetch_size: {
             if (map.get("fetch_size")) |bs| {
                 break :fetch_size std.fmt.parseInt(u32, bs, 10) catch {
@@ -98,18 +89,18 @@ pub const SourceOptions = struct {
             }
             break :fetch_size 10_000;
         };
-
-        const connection = try ConnectionOptions.fromStringMap(conn_map);
+        const connection = try ConnectionOptions.fromMap(allocator, map);
 
         return .{
             .connection = connection,
             .fetch_size = fetch_size,
-            .sql = sql,
+            .sql = try allocator.dupe(u8, sql),
         };
     }
 
-    pub fn deinit(self: SourceOptions) void {
-        self.connection.deinit();
+    pub fn deinit(self: SourceOptions, allocator: std.mem.Allocator) void {
+        allocator.free(self.sql);
+        self.connection.deinit(allocator);
     }
 
     pub fn help(output: *std.ArrayList(u8)) !void {
@@ -125,16 +116,17 @@ pub const SourceOptions = struct {
     }
 };
 
-test "SourceOptions.fromStringMap" {
+test "SourceOptions.fromMap" {
     const allocator = std.testing.allocator;
     var map = StringMap.init(allocator);
     defer map.deinit();
-    try map.put("conn--connection-string", "foo");
-    try map.put("conn--host", "foo");
-    try map.put("conn--username", "bar");
-    try map.put("conn--password", "baz");
+    try map.put("connection-string", "foo");
+    try map.put("host", "foo");
+    try map.put("username", "bar");
+    try map.put("password", "baz");
     try map.put("sql", "foo");
-    const opts = try SourceOptions.fromStringMap(allocator, map);
+    const opts = try SourceOptions.fromMap(allocator, map);
+    defer opts.deinit(allocator);
     try std.testing.expectEqualStrings("foo", opts.connection.connection_string);
     try std.testing.expectEqualStrings("bar", opts.connection.username);
     try std.testing.expectEqualStrings("baz", opts.connection.password);
@@ -145,7 +137,6 @@ test "SourceOptions.fromStringMap" {
 pub const SinkMode = enum { Append, Truncate };
 
 pub const SinkOptions = struct {
-    allocator: std.mem.Allocator = undefined,
     connection: ConnectionOptions,
     table: []const u8,
     columns: ?[][]const u8 = null,
@@ -153,18 +144,8 @@ pub const SinkOptions = struct {
     mode: SinkMode = .Append,
     batch_size: u32 = 10_000,
 
-    pub fn fromStringMap(allocator: std.mem.Allocator, map: StringMap) !SinkOptions {
-        var conn_map = StringMap.init(allocator);
-        defer conn_map.deinit();
-        var it = map.iterator();
-        while (it.next()) |kv| {
-            if (std.mem.startsWith(u8, kv.key_ptr.*, "conn--")) {
-                try conn_map.put(kv.key_ptr.*[6..], kv.value_ptr.*);
-            }
-        }
-        const table = map.get("table") orelse {
-            return Error.TableNameNotFound;
-        };
+    pub fn fromMap(allocator: std.mem.Allocator, map: StringMap) !SinkOptions {
+        const table = map.get("table") orelse return Error.TableNameNotFound;
         const mode = mode: {
             if (map.get("mode")) |mode_str| {
                 break :mode std.meta.stringToEnum(SinkMode, mode_str) orelse {
@@ -180,18 +161,40 @@ pub const SinkOptions = struct {
             } else break :batch_size 10_000;
         };
 
-        const connection = try ConnectionOptions.fromStringMap(conn_map);
+        const connection = try ConnectionOptions.fromMap(allocator, map);
+
+        const columns = columns: {
+            if (map.get("columns")) |columns_str| {
+                var result = std.ArrayList([]const u8).init(allocator);
+                defer result.deinit();
+
+                var it = std.mem.split(u8, columns_str, ",");
+                while (it.next()) |column| {
+                    try result.append(column);
+                }
+                break :columns try result.toOwnedSlice();
+            } else break :columns null;
+        };
 
         return .{
-            .allocator = allocator,
             .connection = connection,
-            .table = table,
+            .table = try allocator.dupe(u8, table),
+            .columns = columns,
             .mode = mode,
             .batch_size = batch_size,
         };
     }
 
-    pub fn deinit(_: SinkOptions) void {}
+    pub fn deinit(self: SinkOptions, allocator: std.mem.Allocator) void {
+        allocator.free(self.table);
+        if (self.columns) |columns| {
+            for (columns) |column| {
+                allocator.free(column);
+            }
+            allocator.free(columns);
+        }
+        self.connection.deinit(allocator);
+    }
 
     pub fn help(output: *std.ArrayList(u8)) !void {
         try ConnectionOptions.help(output);
@@ -211,16 +214,17 @@ pub const SinkOptions = struct {
     }
 };
 
-test "SinkOptions.fromStringMap" {
+test "SinkOptions.fromMap" {
     const allocator = std.testing.allocator;
     var map = StringMap.init(allocator);
     defer map.deinit();
-    try map.put("conn--connection-string", "foo");
-    try map.put("conn--host", "foo");
-    try map.put("conn--username", "bar");
-    try map.put("conn--password", "baz");
+    try map.put("connection-string", "foo");
+    try map.put("host", "foo");
+    try map.put("username", "bar");
+    try map.put("password", "baz");
     try map.put("table", "foo");
-    const opts = try SinkOptions.fromStringMap(allocator, map);
+    const opts = try SinkOptions.fromMap(allocator, map);
+    defer opts.deinit(allocator);
     try std.testing.expectEqualStrings("foo", opts.connection.connection_string);
     try std.testing.expectEqualStrings("bar", opts.connection.username);
     try std.testing.expectEqualStrings("baz", opts.connection.password);

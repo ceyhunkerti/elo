@@ -18,3 +18,8 @@ pub const Value = p.Value;
 pub const RecordFormatter = p.RecordFormatter;
 pub const FieldType = p.FieldType;
 pub const Timestamp = p.Timestamp;
+
+// utils
+pub const utils = @import("utils.zig");
+pub const fromMap = utils.fromMap;
+pub const fromMapOwned = utils.fromMapOwned;

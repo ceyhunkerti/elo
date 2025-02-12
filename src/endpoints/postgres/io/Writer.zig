@@ -32,12 +32,16 @@ pub fn init(allocator: std.mem.Allocator, options: SinkOptions) Writer {
         ),
     };
 }
+pub fn deinit(self: *Writer) void {
+    self.conn.deinit();
+}
+
 pub fn connect(self: *Writer) !void {
     return try self.conn.connect();
 }
 
-pub fn deinit(self: *Writer) void {
-    self.conn.deinit();
+pub fn help(allocator: std.mem.Allocator) ![]const u8 {
+    return try allocator.dupe(u8, "hello from writer");
 }
 
 fn getRecordFormatter(self: Writer) RecordFormatter {

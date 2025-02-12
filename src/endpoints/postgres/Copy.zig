@@ -14,12 +14,6 @@ pub const Options = struct {
     header: ?[]const u8 = null,
     quote: ?[]const u8 = null,
     escape: ?[]const u8 = null,
-    force_quote: ?[]const u8 = null,
-    force_not_null: ?[]const u8 = null,
-    force_null: ?[]const u8 = null,
-    on_error: ?[]const u8 = null,
-    encoding: ?[]const u8 = null,
-    log_verbosity: ?[]const u8 = null,
 
     pub fn toString(self: Options, allocator: std.mem.Allocator) ![]u8 {
         var list = std.ArrayList(u8).init(allocator);
@@ -39,6 +33,39 @@ pub const Options = struct {
         }
 
         return try list.toOwnedSlice();
+    }
+
+    pub fn fromMap(allocator: std.mem.Allocator, map: std.StringHashMap([]const u8)) !Options {
+        const format = map.get("copy-format");
+        const freeze = map.get("copy-freeze");
+        const delimiter = map.get("copy-delimiter");
+        const copy_null = map.get("copy-null");
+        const default = map.get("copy-default");
+        const header = map.get("copy-header");
+        const quote = map.get("copy-quote");
+        const escape = map.get("copy-escape");
+
+        return .{
+            .format = if (format) |f| try allocator.dupe(u8, f) else null,
+            .freeze = if (freeze) |f| try allocator.dupe(u8, f) else null,
+            .delimiter = if (delimiter) |d| try allocator.dupe(u8, d) else null,
+            .null = if (copy_null) |n| try allocator.dupe(u8, n) else null,
+            .default = if (default) |d| try allocator.dupe(u8, d) else null,
+            .header = if (header) |h| try allocator.dupe(u8, h) else null,
+            .quote = if (quote) |q| try allocator.dupe(u8, q) else null,
+            .escape = if (escape) |e| try allocator.dupe(u8, e) else null,
+        };
+    }
+
+    pub fn deinit(self: Options, allocator: std.mem.Allocator) void {
+        if (self.format) |f| allocator.free(f);
+        if (self.freeze) |f| allocator.free(f);
+        if (self.delimiter) |d| allocator.free(d);
+        if (self.null) |n| allocator.free(n);
+        if (self.default) |d| allocator.free(d);
+        if (self.header) |h| allocator.free(h);
+        if (self.quote) |q| allocator.free(q);
+        if (self.escape) |e| allocator.free(e);
     }
 };
 

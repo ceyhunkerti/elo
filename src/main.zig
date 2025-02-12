@@ -16,9 +16,7 @@ pub fn main() !void {
     defer registry.deinit();
 
     const cmd = try cli.init(allocator);
-    defer {
-        cmd.deinit();
-    }
+    defer cmd.deinit();
 
     var params = cli.Params{ .registry = &registry };
     try cmd.parse();
@@ -28,11 +26,12 @@ pub fn main() !void {
 
 pub fn register(registry: *EndpointRegistry) !void {
     const oracle = @import("endpoints/oracle/oracle.zig");
+    const postgres = @import("endpoints/postgres/postgres.zig");
 
     try oracle.register(registry);
+    try postgres.register(registry);
 }
 
 test {
     std.testing.refAllDecls(@This());
-    _ = @import("base");
 }
