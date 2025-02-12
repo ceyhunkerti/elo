@@ -3,6 +3,7 @@ pub const endpoint = @import("endpoint/endpoint.zig");
 pub const EndpointRegistry = endpoint.Registry;
 pub const Source = endpoint.Source;
 pub const Sink = endpoint.Sink;
+pub const RegistryError = endpoint.Error;
 
 // wire
 pub const w = @import("wire/wire.zig");

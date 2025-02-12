@@ -18,6 +18,7 @@ pub const Error = error{
 
 allocator: std.mem.Allocator,
 reader: ?io.Reader = null,
+options: ?SourceOptions = null,
 
 pub fn init(allocator: std.mem.Allocator) Source {
     return .{ .allocator = allocator };
@@ -25,6 +26,8 @@ pub fn init(allocator: std.mem.Allocator) Source {
 pub fn deinit(ctx: *anyopaque) void {
     var self: *Source = @ptrCast(@alignCast(ctx));
     if (self.reader) |*reader| reader.deinit();
+    if (self.options) |*options| options.deinit(self.allocator);
+
     self.allocator.destroy(self);
 }
 
@@ -36,7 +39,7 @@ pub fn get(self: *Source) BaseSource {
         .vtable = &.{
             .prepare = prepare,
             .run = run,
-            .help = help,
+            .info = info,
             .deinit = deinit,
         },
     };
@@ -45,10 +48,8 @@ pub fn get(self: *Source) BaseSource {
 pub fn prepare(ctx: *anyopaque, options: ?std.StringHashMap([]const u8)) anyerror!void {
     const self: *Source = @ptrCast(@alignCast(ctx));
     if (options) |o| {
-        self.reader = io.Reader.init(
-            self.allocator,
-            try SourceOptions.fromMap(self.allocator, o),
-        );
+        self.options = try SourceOptions.fromMap(self.allocator, o);
+        self.reader = io.Reader.init(self.allocator, self.options.?);
     } else {
         return Error.OptionsRequired;
     }
@@ -59,7 +60,7 @@ pub fn run(ctx: *anyopaque, wire: *Wire) anyerror!void {
     return if (self.reader) |*reader| try reader.run(wire) else error.NotInitialized;
 }
 
-pub fn help(ctx: *anyopaque) anyerror![]const u8 {
+pub fn info(ctx: *anyopaque) anyerror![]const u8 {
     const self: *Source = @ptrCast(@alignCast(ctx));
-    return io.Reader.help(self.allocator);
+    return try io.Reader.info(self.allocator);
 }

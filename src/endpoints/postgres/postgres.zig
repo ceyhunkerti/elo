@@ -26,7 +26,7 @@ test "source" {
     const allocator = std.testing.allocator;
     var s = try source(allocator);
     defer s.deinit();
-    const h = try s.help();
+    const h = try s.info();
     defer s.allocator.free(h);
     try std.testing.expectEqualStrings("hello from reader", h);
 }

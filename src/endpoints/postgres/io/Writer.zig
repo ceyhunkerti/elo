@@ -40,7 +40,7 @@ pub fn connect(self: *Writer) !void {
     return try self.conn.connect();
 }
 
-pub fn help(allocator: std.mem.Allocator) ![]const u8 {
+pub fn info(allocator: std.mem.Allocator) ![]const u8 {
     return try allocator.dupe(u8, "hello from writer");
 }
 

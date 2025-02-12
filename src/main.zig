@@ -1,5 +1,5 @@
 const std = @import("std");
-const cli = @import("cli.zig");
+const cli = @import("cli/cli.zig");
 const base = @import("base");
 const EndpointRegistry = base.EndpointRegistry;
 
@@ -18,7 +18,7 @@ pub fn main() !void {
     const cmd = try cli.init(allocator);
     defer cmd.deinit();
 
-    var params = cli.Params{ .registry = &registry };
+    var params = cli.Params{ .endpoint_registry = &registry };
     try cmd.parse();
 
     _ = try cmd.run(&params);

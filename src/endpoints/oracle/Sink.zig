@@ -17,6 +17,7 @@ pub const Error = error{
 
 allocator: std.mem.Allocator,
 writer: ?io.Writer = null,
+options: ?SinkOptions = null,
 
 pub fn init(allocator: std.mem.Allocator) Sink {
     return .{ .allocator = allocator };
@@ -24,6 +25,8 @@ pub fn init(allocator: std.mem.Allocator) Sink {
 pub fn deinit(ctx: *anyopaque) void {
     var self: *Sink = @ptrCast(@alignCast(ctx));
     if (self.writer) |*writer| writer.deinit();
+    if (self.options) |*options| options.deinit(self.allocator);
+
     self.allocator.destroy(self);
 }
 
@@ -35,7 +38,7 @@ pub fn get(self: *Sink) BaseSink {
         .vtable = &.{
             .prepare = prepare,
             .run = run,
-            .help = help,
+            .info = info,
             .deinit = deinit,
         },
     };
@@ -44,10 +47,8 @@ pub fn get(self: *Sink) BaseSink {
 pub fn prepare(ctx: *anyopaque, options: ?std.StringHashMap([]const u8)) anyerror!void {
     const self: *Sink = @ptrCast(@alignCast(ctx));
     if (options) |o| {
-        self.writer = io.Writer.init(
-            self.allocator,
-            try SinkOptions.fromMap(self.allocator, o),
-        );
+        self.options = try SinkOptions.fromMap(self.allocator, o);
+        self.writer = io.Writer.init(self.allocator, self.options.?);
     } else {
         return Error.OptionsRequired;
     }
@@ -58,7 +59,7 @@ pub fn run(ctx: *anyopaque, wire: *Wire) anyerror!void {
     return if (self.writer) |*writer| try writer.run(wire) else error.NotInitialized;
 }
 
-pub fn help(ctx: *anyopaque) anyerror![]const u8 {
+pub fn info(ctx: *anyopaque) anyerror![]const u8 {
     const self: *Sink = @ptrCast(@alignCast(ctx));
-    return io.Writer.help(self.allocator);
+    return io.Writer.info(self.allocator);
 }

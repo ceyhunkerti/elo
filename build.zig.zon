@@ -23,9 +23,12 @@
     // Once all dependencies are fetched, `zig build` no longer requires
     // internet connectivity.
     .dependencies = .{
+        // .argz = .{
+        //     .url = "https://github.com/ceyhunkerti/argz/archive/refs/tags/v0.3.6.tar.gz",
+        //     .hash = "12200e4899b8a0c807df754f29d92e00b111c9724b9fa95594e97964cd59173bba1a",
+        // },
         .argz = .{
-            .url = "https://github.com/ceyhunkerti/argz/archive/refs/tags/v0.3.2.tar.gz",
-            .hash = "1220219c089fe8f33b4da2f254a348419be15421942789c518e9d5aad135fd652940",
+            .path = "../argz",
         },
     },
     .paths = .{

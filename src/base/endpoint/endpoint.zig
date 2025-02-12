@@ -2,6 +2,11 @@ const std = @import("std");
 pub const Source = @import("Source.zig");
 pub const Sink = @import("Sink.zig");
 
+pub const Error = error{
+    SourceNotFound,
+    SinkNotFound,
+};
+
 pub const Registry = struct {
     allocator: std.mem.Allocator,
     sources: std.StringHashMap(Source),
@@ -26,5 +31,13 @@ pub const Registry = struct {
 
         self.sources.deinit();
         self.sinks.deinit();
+    }
+
+    pub fn getSource(self: *Registry, name: []const u8) !Source {
+        return self.sources.get(name) orelse return error.SourceNotFound;
+    }
+
+    pub fn getSink(self: *Registry, name: []const u8) !Sink {
+        return self.sinks.get(name) orelse return error.SinkNotFound;
     }
 };
