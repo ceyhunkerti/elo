@@ -62,9 +62,9 @@ pub fn read(self: *Reader, wire: *Wire) !void {
     const column_count = try stmt.execute();
     while (true) {
         const record = try stmt.fetch(column_count) orelse break;
-        wire.put(try record.asMessage(self.allocator));
+        try wire.put(try record.asMessage(self.allocator));
     }
-    wire.put(Term(self.allocator));
+    try wire.put(Term(self.allocator));
 }
 
 test "Reader.read" {
@@ -95,7 +95,7 @@ test "Reader.read" {
         if (loop_count > 1) {
             unreachable;
         }
-        const message = wire.get();
+        const message = try wire.get();
         defer MessageFactory.destroy(allocator, message);
 
         switch (message.data) {

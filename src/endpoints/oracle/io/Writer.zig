@@ -115,7 +115,7 @@ pub fn write(self: *Writer, wire: *Wire) !void {
     var record_index: u32 = 0;
 
     while (true) {
-        const message = wire.get();
+        const message = try wire.get();
         defer MessageFactory.destroy(self.allocator, message);
         switch (message.data) {
             .Metadata => {},
@@ -200,7 +200,7 @@ test "Writer.write" {
         },
     ) catch unreachable;
     const m1 = r1.asMessage(allocator) catch unreachable;
-    wire.put(m1);
+    try wire.put(m1);
 
     // second record
     const r2 = Record.fromSlice(allocator, &[_]Value{
@@ -220,7 +220,7 @@ test "Writer.write" {
         .{ .Boolean = false }, //is_active
     }) catch unreachable;
     const m2 = r2.asMessage(allocator) catch unreachable;
-    wire.put(m2);
+    try wire.put(m2);
 
     // third record with unicode
     const record3 = Record.fromSlice(allocator, &[_]Value{
@@ -240,9 +240,9 @@ test "Writer.write" {
         .{ .Boolean = true }, //is_active
     }) catch unreachable;
     const m3 = record3.asMessage(allocator) catch unreachable;
-    wire.put(m3);
+    try wire.put(m3);
 
-    wire.put(Term(allocator));
+    try wire.put(Term(allocator));
 
     try writer.write(&wire);
     const check_query = try std.fmt.allocPrint(

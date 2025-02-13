@@ -61,7 +61,7 @@ pub fn run(self: *Reader, wire: *Wire) !void {
     }
 
     try self.read(wire, &cursor);
-    wire.put(Term(self.allocator));
+    try wire.put(Term(self.allocator));
 }
 
 fn read(self: *Reader, wire: *Wire, cursor: *Cursor) !void {
@@ -69,7 +69,7 @@ fn read(self: *Reader, wire: *Wire, cursor: *Cursor) !void {
         const row_count = try cursor.execute();
         if (row_count == 0) break;
         while (try cursor.fetchNext()) |record| {
-            wire.put(try record.asMessage(self.allocator));
+            try wire.put(try record.asMessage(self.allocator));
         }
     }
 }
@@ -100,7 +100,7 @@ test "Reader.run" {
     var wire = Wire.init();
     try reader.run(&wire);
 
-    const message = wire.get();
+    const message = try wire.get();
     defer MessageFactory.destroy(allocator, message);
 
     const record = message.data.Record;
@@ -131,7 +131,7 @@ test "Reader.run" {
     try std.testing.expectEqual(ts2.second, 45);
     try std.testing.expectEqual(ts2.nanosecond, 123456000);
 
-    const term = wire.get();
+    const term = try wire.get();
     defer MessageFactory.destroy(allocator, term);
     try std.testing.expectEqual(term.data, .Nil);
 }
