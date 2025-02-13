@@ -15,6 +15,7 @@ pub fn AtomicBlockingQueue(comptime T: type) type {
         tail: ?*Node,
         mutex: std.Thread.Mutex,
         cond: std.Thread.Condition,
+        err: ?anyerror = null,
 
         pub const Self = @This();
         pub const Node = std.DoublyLinkedList(T).Node;
@@ -28,11 +29,19 @@ pub fn AtomicBlockingQueue(comptime T: type) type {
             };
         }
 
-        pub fn put(self: *Self, node: *Node) void {
+        pub fn interruptWithError(self: *Self, err: anyerror) void {
+            self.mutex.lock();
+            defer self.mutex.unlock();
+            self.err = err;
+        }
+
+        pub fn put(self: *Self, node: *Node) !void {
             node.next = null;
 
             self.mutex.lock();
             defer self.mutex.unlock();
+
+            if (self.err) |err| return err;
 
             node.prev = self.tail;
             self.tail = node;
@@ -47,11 +56,13 @@ pub fn AtomicBlockingQueue(comptime T: type) type {
             self.cond.signal();
         }
 
-        pub fn get(self: *Self) *Node {
+        pub fn get(self: *Self) !*Node {
             self.mutex.lock();
             defer self.mutex.unlock();
+            if (self.err) |err| return err;
 
             while (self.head == null) {
+                if (self.err) |err| return err;
                 self.cond.wait(&self.mutex);
             }
 
@@ -108,8 +119,8 @@ test "Wire" {
     const producer = struct {
         pub fn producerThread(allocator_: Allocator, wire: *Wire) !void {
             const m = try p.Record.Message(allocator_, &[_]p.Value{ .{ .Int = 1 }, .{ .Boolean = true } });
-            wire.put(m);
-            wire.put(Term(allocator_));
+            try wire.put(m);
+            try wire.put(Term(allocator_));
         }
     };
 
@@ -118,7 +129,7 @@ test "Wire" {
     var producer_thread = try std.Thread.spawn(.{ .allocator = allocator }, producer.producerThread, .{ allocator, &wire });
 
     while (true) {
-        const message = wire.get();
+        const message = try wire.get();
         defer MessageFactory.destroy(allocator, message);
         switch (message.data) {
             .Metadata => |_| {},
@@ -138,9 +149,9 @@ test "MessageQueue sync" {
 
     var wire = Wire.init();
     const record = p.Record.fromSlice(allocator, &[_]p.Value{ .{ .Int = 1 }, .{ .Boolean = true } }) catch unreachable;
-    wire.put(record.asMessage(allocator) catch unreachable);
+    try wire.put(record.asMessage(allocator) catch unreachable);
 
-    const mr = wire.get();
+    const mr = try wire.get();
     defer MessageFactory.destroy(allocator, mr);
 
     try testing.expectEqual(1, mr.data.Record.get(0).Int);
@@ -153,6 +164,7 @@ pub const MessageFactory = struct {
             .data = switch (@TypeOf(val)) {
                 p.Metadata => .{ .Metadata = val },
                 p.Record => .{ .Record = val },
+
                 else => .Nil,
             },
         };

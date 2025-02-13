@@ -78,7 +78,7 @@ pub fn write(self: *Writer, wire: *Wire) !void {
     try copy.start();
 
     while (true) {
-        const message = wire.get();
+        const message = try wire.get();
         defer MessageFactory.destroy(self.allocator, message);
         switch (message.data) {
             .Metadata => {},
@@ -126,7 +126,7 @@ test "Writer.run" {
         },
     ) catch unreachable;
     const m1 = r1.asMessage(allocator) catch unreachable;
-    wire.put(m1);
+    try wire.put(m1);
 
     // second record
     const r2 = Record.fromSlice(allocator, &[_]Value{
@@ -134,7 +134,7 @@ test "Writer.run" {
         .{ .Bytes = try allocator.dupe(u8, "Jane") }, //name
     }) catch unreachable;
     const m2 = r2.asMessage(allocator) catch unreachable;
-    wire.put(m2);
+    try wire.put(m2);
 
     // // third record with unicode
     // const record3 = p.Record.fromSlice(allocator, &[_]p.Value{
@@ -144,7 +144,7 @@ test "Writer.run" {
     // const m3 = record3.asMessage(allocator) catch unreachable;
     // wire.put(m3);
 
-    wire.put(Term(allocator));
+    try wire.put(Term(allocator));
 
     try writer.run(&wire);
 }

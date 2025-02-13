@@ -24,10 +24,7 @@ pub fn initFromEnv(allocator: std.mem.Allocator) !ConnectionParams {
         std.debug.print("Missing ORACLE_TEST_CONNECTION_STRING environment variable\n", .{});
         return error.MissingTestEnvironmentVariable;
     };
-    const auth_mode = std.posix.getenv("ORACLE_TEST_AUTH_MODE") orelse {
-        std.debug.print("Missing ORACLE_TEST_AUTH_MODE environment variable\n", .{});
-        return error.MissingTestEnvironmentVariable;
-    };
+    const auth_mode = std.posix.getenv("ORACLE_TEST_AUTH_MODE");
 
     return ConnectionParams{
         .allocator = allocator,
