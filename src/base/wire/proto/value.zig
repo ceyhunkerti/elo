@@ -44,11 +44,10 @@ pub const Value = union(FieldType) {
             // todo
             // .Map => |map| if (map) |m| m.deinit(),
             // .Json => |json| if (json) |j| j.deinit(allocator),
-            .Array => |arr| if (arr) |a| {
-                for (a) |item| item.deinit(allocator);
-                allocator.free(a);
-            },
-            // todo
+            // .Array => |arr| if (arr) |a| {
+            //     for (a) |item| item.deinit(allocator);
+            //     allocator.free(a);
+            // },
             else => {},
         }
     }
@@ -64,10 +63,6 @@ pub const Value = union(FieldType) {
                 std.debug.print("Unsupported type: {s}\n", .{@tagName(self)});
                 return error.UnsupportedType;
             },
-            // .Array => |arr| if (arr) |a| {
-            //     for (a) |item| try item.write(result);
-            // },
-            // .Json => |json| if (json) |j| try j.write(result),
         }
     }
 
