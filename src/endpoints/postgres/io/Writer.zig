@@ -59,6 +59,9 @@ fn getRecordFormatter(self: Writer) RecordFormatter {
 }
 
 pub fn run(self: *Writer, wire: *Wire) !void {
+    errdefer |err| {
+        wire.interruptWithError(self.allocator, err);
+    }
     if (!self.conn.isConnected()) {
         try self.connect();
     }

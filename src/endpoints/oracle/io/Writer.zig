@@ -17,6 +17,8 @@ const md = @import("../metadata/metadata.zig");
 const c = @import("../c.zig").c;
 const t = @import("../testing/testing.zig");
 
+pub const Error = error{} || Connection.Error;
+
 allocator: std.mem.Allocator,
 conn: Connection,
 options: SinkOptions,
@@ -293,6 +295,9 @@ fn writeBatch(self: *Writer, size: u32) !void {
 }
 
 pub fn run(self: *Writer, wire: *Wire) !void {
+    errdefer |err| {
+        wire.interruptWithError(self.allocator, err);
+    }
     if (!self.conn.isConnected()) {
         try self.connect();
     }

@@ -29,10 +29,26 @@ pub fn AtomicBlockingQueue(comptime T: type) type {
             };
         }
 
-        pub fn interruptWithError(self: *Self, err: anyerror) void {
+        pub fn drain(self: *Self, allocator: Allocator) void {
+            while (!self.isEmpty()) {
+                const head = self.head.?;
+                self.head = head.next;
+                if (head.next) |new_head| {
+                    new_head.prev = null;
+                } else {
+                    self.tail = null;
+                }
+                head.prev = null;
+                head.next = null;
+                MessageFactory.destroy(allocator, head);
+            }
+        }
+
+        pub fn interruptWithError(self: *Self, allocator: Allocator, err: anyerror) void {
             self.mutex.lock();
             defer self.mutex.unlock();
             self.err = err;
+            self.drain(allocator);
         }
 
         pub fn put(self: *Self, node: *Node) !void {

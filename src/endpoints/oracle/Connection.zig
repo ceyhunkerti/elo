@@ -8,6 +8,11 @@ const Statement = @import("Statement.zig");
 const t = @import("testing/testing.zig");
 const c = @import("c.zig").c;
 
+pub const Error = error{
+    UnknownConnectionMode,
+    DpiBindVariableCreationError,
+};
+
 pub const Privilege = enum {
     SYSDBA,
     SYSOPER,
@@ -37,7 +42,7 @@ pub const Privilege = enum {
                     return @field(Privilege, field.name);
                 }
             }
-            return error.Fail;
+            return error.UnknownConnectionMode;
         } else {
             return Privilege.DEFAULT;
         }
@@ -118,7 +123,7 @@ pub fn connect(self: *Connection) !void {
     }
 
     if (dpi_conn == null) {
-        return error.Fail;
+        return error.FailedToCreateConnection;
     }
     self.dpi_conn = dpi_conn;
 }
@@ -183,7 +188,7 @@ pub fn newDpiVariable(
         @"var",
         data,
     ) < 0) {
-        return error.Fail;
+        return error.DpiBindVariableCreationError;
     }
 }
 
