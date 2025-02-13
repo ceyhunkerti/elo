@@ -45,6 +45,10 @@ pub fn connect(self: *Reader) !void {
 }
 
 pub fn run(self: *Reader, wire: *Wire) !void {
+    errdefer |err| {
+        wire.interruptWithError(self.allocator, err);
+    }
+
     if (!self.conn.isConnected()) {
         try self.connect();
     }
@@ -61,7 +65,12 @@ pub fn run(self: *Reader, wire: *Wire) !void {
     }
 
     try self.read(wire, &cursor);
-    try wire.put(Term(self.allocator));
+
+    const terminator = Term(self.allocator);
+    return wire.put(terminator) catch |err| put: {
+        MessageFactory.destroy(self.allocator, terminator);
+        break :put err;
+    };
 }
 
 fn read(self: *Reader, wire: *Wire, cursor: *Cursor) !void {
@@ -69,7 +78,11 @@ fn read(self: *Reader, wire: *Wire, cursor: *Cursor) !void {
         const row_count = try cursor.execute();
         if (row_count == 0) break;
         while (try cursor.fetchNext()) |record| {
-            try wire.put(try record.asMessage(self.allocator));
+            const msg = try record.asMessage(self.allocator);
+            wire.put(msg) catch |err| {
+                MessageFactory.destroy(self.allocator, msg);
+                return err;
+            };
         }
     }
 }

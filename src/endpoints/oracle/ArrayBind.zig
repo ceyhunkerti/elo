@@ -8,6 +8,12 @@ const c = @import("c.zig").c;
 const e = @import("error.zig");
 const b = @import("base");
 
+pub const Error = error{
+    UnknownColumnSize,
+    TypeConversionNotSupported,
+    ColumnTypeNotSupported,
+};
+
 allocator: std.mem.Allocator = undefined,
 stmt: *Statement = undefined,
 columns: []md.Column = undefined,
@@ -22,7 +28,7 @@ pub fn init(allocator: std.mem.Allocator, stmt: *Statement, columns: []md.Column
 
     for (columns, 0..) |column, ci| {
         const size = switch (column.type_info.?.ext.?.dpi_native_type_num) {
-            c.DPI_NATIVE_TYPE_BYTES => column.type_info.?.size orelse unreachable,
+            c.DPI_NATIVE_TYPE_BYTES => column.type_info.?.size orelse return Error.UnknownColumnSize,
             c.DPI_NATIVE_TYPE_INT64 => 0,
             else => 0,
         };
@@ -102,7 +108,7 @@ pub fn add(self: *ArrayBind, index: u32, record: *b.Record) !void {
                                 self.columns[ci].name,
                                 self.columns[ci].type_info.?.ext.?.dpi_oracle_type_num,
                             });
-                            return error.Fail;
+                            return error.TypeConversionNotSupported;
                         },
                     }
                     self.dpi_data_array.?[ci].?[index].isNull = 0;
@@ -137,7 +143,7 @@ pub fn add(self: *ArrayBind, index: u32, record: *b.Record) !void {
                                 self.columns[ci].name,
                                 self.columns[ci].type_info.?.ext.?.dpi_oracle_type_num,
                             });
-                            return error.Fail;
+                            return error.TypeConversionNotSupported;
                         },
                     }
                     self.dpi_data_array.?[ci].?[index].isNull = 0;
@@ -157,11 +163,11 @@ pub fn add(self: *ArrayBind, index: u32, record: *b.Record) !void {
                             self.columns[ci].name,
                             self.columns[ci].type_info.?.ext.?.dpi_oracle_type_num,
                         });
-                        return error.Fail;
+                        return error.TypeConversionNotSupported;
                     }
                     if (c.dpiVar_setFromBytes(self.dpi_var_array.?[ci].?, @intCast(index), v.ptr, @intCast(v.len)) < 0) {
                         std.debug.print("Failed to setFromBytes with error: {s}\n", .{self.stmt.conn.errorMessage()});
-                        unreachable;
+                        return error.Fail;
                     }
                 } else {
                     self.dpi_data_array.?[ci].?[index].isNull = 1;
@@ -191,7 +197,7 @@ pub fn add(self: *ArrayBind, index: u32, record: *b.Record) !void {
             // todo
             else => {
                 std.debug.print("\nUnhandled column in writer {any}\n", .{column});
-                unreachable;
+                return error.ColumnTypeNotSupported;
             },
         }
     }

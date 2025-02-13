@@ -11,6 +11,8 @@ const Term = base.Term;
 
 const t = @import("../testing/testing.zig");
 
+pub const Error = error{} || Connection.Error;
+
 allocator: std.mem.Allocator,
 conn: Connection = undefined,
 options: SourceOptions,
@@ -51,10 +53,20 @@ pub fn connect(self: *Reader) !void {
 }
 
 pub fn run(self: *Reader, wire: *Wire) !void {
+    errdefer |err| {
+        wire.interruptWithError(self.allocator, err);
+    }
+
     if (!self.conn.isConnected()) {
         try self.connect();
     }
     try self.read(wire);
+
+    const terminator = Term(self.allocator);
+    return wire.put(terminator) catch |err| put: {
+        MessageFactory.destroy(self.allocator, terminator);
+        break :put err;
+    };
 }
 
 pub fn read(self: *Reader, wire: *Wire) !void {
@@ -62,9 +74,12 @@ pub fn read(self: *Reader, wire: *Wire) !void {
     const column_count = try stmt.execute();
     while (true) {
         const record = try stmt.fetch(column_count) orelse break;
-        try wire.put(try record.asMessage(self.allocator));
+        const msg = try record.asMessage(self.allocator);
+        wire.put(msg) catch |err| {
+            MessageFactory.destroy(self.allocator, msg);
+            return err;
+        };
     }
-    try wire.put(Term(self.allocator));
 }
 
 test "Reader.read" {

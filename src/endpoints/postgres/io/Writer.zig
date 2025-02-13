@@ -59,6 +59,9 @@ fn getRecordFormatter(self: Writer) RecordFormatter {
 }
 
 pub fn run(self: *Writer, wire: *Wire) !void {
+    errdefer |err| {
+        wire.interruptWithError(self.allocator, err);
+    }
     if (!self.conn.isConnected()) {
         try self.connect();
     }
@@ -135,14 +138,6 @@ test "Writer.run" {
     }) catch unreachable;
     const m2 = r2.asMessage(allocator) catch unreachable;
     try wire.put(m2);
-
-    // // third record with unicode
-    // const record3 = p.Record.fromSlice(allocator, &[_]p.Value{
-    //     .{ .Int = 3 }, //id
-    //     .{ .Bytes = try allocator.dupe(u8, "Έ Ή") }, //name
-    // }) catch unreachable;
-    // const m3 = record3.asMessage(allocator) catch unreachable;
-    // wire.put(m3);
 
     try wire.put(Term(allocator));
 
