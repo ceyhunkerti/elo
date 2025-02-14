@@ -13,9 +13,9 @@ pub fn init(b: *std.Build) Deps {
 
 pub fn setupOracle(self: Deps, step: *Step.Compile) void {
     step.addCSourceFile(.{
-        .file = self.b.path("lib/oracle/odpi-5.4.1/embed/dpi.c"),
+        .file = self.b.path("lib/oracle/odpi/embed/dpi.c"),
     });
-    step.addIncludePath(self.b.path("lib/oracle/odpi-5.4.1/include"));
+    step.addIncludePath(self.b.path("lib/oracle/odpi/include"));
 }
 
 pub fn setupPostgres(_: Deps, step: *Step.Compile) void {

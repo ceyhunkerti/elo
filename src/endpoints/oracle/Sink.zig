@@ -61,5 +61,5 @@ pub fn run(ctx: *anyopaque, wire: *Wire) anyerror!void {
 
 pub fn info(ctx: *anyopaque) anyerror![]const u8 {
     const self: *Sink = @ptrCast(@alignCast(ctx));
-    return io.Writer.info(self.allocator);
+    return try io.Writer.info(self.allocator);
 }
