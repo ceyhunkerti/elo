@@ -46,6 +46,8 @@ pub const ConnectionOptions = struct {
 
     pub fn help(output: *std.ArrayList(u8)) !void {
         try output.appendSlice(
+            \\Connection options:
+            \\
             \\--host [REQUIRED]
             \\
             \\--database [REQUIRED]
@@ -60,8 +62,8 @@ pub const ConnectionOptions = struct {
 
 pub const SourceOptions = struct {
     connection: ConnectionOptions,
-    fetch_size: u32 = 10_000,
     sql: [:0]const u8,
+    fetch_size: u32 = 10_000,
 
     pub fn fromMap(allocator: std.mem.Allocator, map: std.StringHashMap([]const u8)) !SourceOptions {
         const sql = map.get("sql") orelse return Error.SqlNotFound;
@@ -84,6 +86,17 @@ pub const SourceOptions = struct {
     pub fn deinit(self: SourceOptions, allocator: std.mem.Allocator) void {
         allocator.free(self.sql);
         self.connection.deinit(allocator);
+    }
+
+    pub fn help(output: *std.ArrayList(u8)) !void {
+        try ConnectionOptions.help(output);
+        try output.appendSlice(
+            \\
+            \\--sql [REQUIRED]
+            \\
+            \\--fetch_size [OPTIONAL - defaults to 10_000]
+            \\
+        );
     }
 };
 
@@ -148,5 +161,21 @@ pub const SinkOptions = struct {
         if (self.copy_options) |copy_options| {
             copy_options.deinit(allocator);
         }
+    }
+
+    pub fn help(output: *std.ArrayList(u8)) !void {
+        try ConnectionOptions.help(output);
+        try output.appendSlice(
+            \\General options:
+            \\--table [REQUIRED]
+            \\
+            \\--mode [OPTIONAL]
+            \\
+            \\--batch_size [OPTIONAL]
+            \\
+            \\--columns [OPTIONAL]
+            \\
+        );
+        try CopyOptions.help(output);
     }
 };

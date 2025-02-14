@@ -48,7 +48,10 @@ pub fn initAndConnect(allocator: std.mem.Allocator, options: SinkOptions) !Write
 }
 
 pub fn info(allocator: std.mem.Allocator) ![]const u8 {
-    return try allocator.dupe(u8, "hello from writer");
+    var output = std.ArrayList(u8).init(allocator);
+    defer output.deinit();
+    try SinkOptions.help(&output);
+    return try output.toOwnedSlice();
 }
 
 pub fn deinit(self: *Writer) void {

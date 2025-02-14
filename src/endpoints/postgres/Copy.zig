@@ -67,6 +67,29 @@ pub const Options = struct {
         if (self.quote) |q| allocator.free(q);
         if (self.escape) |e| allocator.free(e);
     }
+
+    pub fn help(output: *std.ArrayList(u8)) !void {
+        try output.appendSlice(
+            \\Copy command options:
+            \\
+            \\--copy-format [OPTIONAL]
+            \\
+            \\--copy-freeze [OPTIONAL]
+            \\
+            \\--copy-delimiter [OPTIONAL]
+            \\
+            \\--copy-null [OPTIONAL]
+            \\
+            \\--copy-default [OPTIONAL]
+            \\
+            \\--copy-header [OPTIONAL]
+            \\
+            \\--copy-quote [OPTIONAL]
+            \\
+            \\--copy-escape [OPTIONAL]
+            \\
+        );
+    }
 };
 
 allocator: std.mem.Allocator,

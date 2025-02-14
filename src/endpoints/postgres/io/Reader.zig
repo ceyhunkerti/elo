@@ -37,7 +37,10 @@ pub fn deinit(self: *Reader) void {
 }
 
 pub fn info(allocator: std.mem.Allocator) ![]const u8 {
-    return try allocator.dupe(u8, "hello from reader");
+    var output = std.ArrayList(u8).init(allocator);
+    defer output.deinit();
+    try SourceOptions.help(&output);
+    return try output.toOwnedSlice();
 }
 
 pub fn connect(self: *Reader) !void {

@@ -65,6 +65,31 @@ fn initInfo(allocator: std.mem.Allocator) !*Command {
     source.arguments = .{ .count = 1 };
     try info.addCommand(source);
 
+    const sink = Command.init(allocator, "sink", struct {
+        fn run(cmd: *const Command, args: ?*anyopaque) anyerror!i32 {
+            const params: *Params = @ptrCast(@alignCast(args));
+            if (cmd.arguments) |arguments| {
+                if (arguments.values()) |values| {
+                    const name = values[0].String;
+                    const sink: BaseSink = params.endpoint_registry.sinks.get(name) orelse {
+                        std.debug.print("Unknown sink endpoint: [{s}]\n", .{name});
+                        return error.Fail;
+                    };
+                    const sink_info = try sink.info();
+                    defer sink.allocator.free(sink_info);
+                    std.debug.print("Sink info for [{s}]:\n", .{name});
+                    std.debug.print("{s}\n", .{sink_info});
+                }
+            } else {
+                std.debug.print("Missing required argument SINK_NAME\n", .{});
+                return error.Fail;
+            }
+            return 0;
+        }
+    }.run);
+    sink.arguments = .{ .count = 1 };
+    try info.addCommand(sink);
+
     return info;
 }
 

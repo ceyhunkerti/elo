@@ -102,6 +102,7 @@ test "Reader.read" {
     try reader.connect();
     var wire = Wire.init();
     try reader.read(&wire);
+    try wire.put(Term(allocator));
 
     var message_count: usize = 0;
     var term_received: bool = false;

@@ -41,7 +41,10 @@ pub fn connect(self: *Writer) !void {
 }
 
 pub fn info(allocator: std.mem.Allocator) ![]const u8 {
-    return try allocator.dupe(u8, "hello from writer");
+    var output = std.ArrayList(u8).init(allocator);
+    defer output.deinit();
+    try SinkOptions.help(&output);
+    return try output.toOwnedSlice();
 }
 
 fn getRecordFormatter(self: Writer) RecordFormatter {
