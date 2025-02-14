@@ -1,0 +1,3 @@
+[submodule "lib/oracle/odpi"]
+	path = lib/oracle/odpi
+	url = git@github.com:oracle/odpi.git
