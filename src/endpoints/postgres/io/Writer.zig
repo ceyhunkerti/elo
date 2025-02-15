@@ -51,12 +51,10 @@ fn getRecordFormatter(self: Writer) RecordFormatter {
     const options = self.options;
     var record_formatter = RecordFormatter{};
     if (options.copy_options) |co| {
-        if (co.delimiter) |delimiter| {
-            record_formatter.delimiters.field_delimiter = if (delimiter[0] == '\'' and delimiter[delimiter.len - 1] == '\'')
-                delimiter[1 .. delimiter.len - 1]
-            else
-                delimiter;
-        }
+        record_formatter.delimiters.field_delimiter = if (co.delimiter[0] == '\'' and co.delimiter[co.delimiter.len - 1] == '\'')
+            co.delimiter[1 .. co.delimiter.len - 1]
+        else
+            co.delimiter;
     }
     return record_formatter;
 }

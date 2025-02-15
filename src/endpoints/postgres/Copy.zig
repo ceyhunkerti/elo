@@ -6,9 +6,9 @@ const b = @import("base");
 const Connection = @import("Connection.zig");
 
 pub const Options = struct {
-    format: ?[]const u8 = null,
+    format: []const u8,
+    delimiter: []const u8,
     freeze: ?[]const u8 = null,
-    delimiter: ?[]const u8 = null,
     null: ?[]const u8 = null,
     default: ?[]const u8 = null,
     header: ?[]const u8 = null,
@@ -24,11 +24,19 @@ pub const Options = struct {
             const name = field.name;
             const value = @field(self, field.name);
 
-            if (value) |v| {
+            const is_optional = @typeInfo(field.type) == .Optional;
+            if (is_optional) {
+                if (value) |v| {
+                    if (list.items.len > 0) {
+                        try list.appendSlice(", ");
+                    }
+                    try list.writer().print("{s} {s}", .{ name, v });
+                }
+            } else {
                 if (list.items.len > 0) {
                     try list.appendSlice(", ");
                 }
-                try list.writer().print("{s} {s}", .{ name, v });
+                try list.writer().print("{s} {s}", .{ name, value });
             }
         }
 
@@ -36,9 +44,10 @@ pub const Options = struct {
     }
 
     pub fn fromMap(allocator: std.mem.Allocator, map: std.StringHashMap([]const u8)) !Options {
-        const format = map.get("copy-format");
+        const format = map.get("copy-format") orelse "CSV";
+        const delimiter = map.get("copy-delimiter") orelse "','";
+
         const freeze = map.get("copy-freeze");
-        const delimiter = map.get("copy-delimiter");
         const copy_null = map.get("copy-null");
         const default = map.get("copy-default");
         const header = map.get("copy-header");
@@ -46,9 +55,10 @@ pub const Options = struct {
         const escape = map.get("copy-escape");
 
         return .{
-            .format = if (format) |f| try allocator.dupe(u8, f) else null,
+            .format = try allocator.dupe(u8, format),
+            .delimiter = try allocator.dupe(u8, delimiter),
+
             .freeze = if (freeze) |f| try allocator.dupe(u8, f) else null,
-            .delimiter = if (delimiter) |d| try allocator.dupe(u8, d) else null,
             .null = if (copy_null) |n| try allocator.dupe(u8, n) else null,
             .default = if (default) |d| try allocator.dupe(u8, d) else null,
             .header = if (header) |h| try allocator.dupe(u8, h) else null,
@@ -58,9 +68,10 @@ pub const Options = struct {
     }
 
     pub fn deinit(self: Options, allocator: std.mem.Allocator) void {
-        if (self.format) |f| allocator.free(f);
+        allocator.free(self.format);
+        allocator.free(self.delimiter);
+
         if (self.freeze) |f| allocator.free(f);
-        if (self.delimiter) |d| allocator.free(d);
         if (self.null) |n| allocator.free(n);
         if (self.default) |d| allocator.free(d);
         if (self.header) |h| allocator.free(h);
@@ -157,6 +168,8 @@ pub fn command(self: Copy) ![]u8 {
         try list.appendSlice(" WITH (");
         try list.appendSlice(o);
         try list.append(')');
+    } else {
+        try list.appendSlice(" WITH (FORMAT CSV delimiter ',')");
     }
 
     try list.appendSlice("\x00");

@@ -30,7 +30,7 @@ pub fn AtomicBlockingQueue(comptime T: type) type {
         }
 
         pub fn drain(self: *Self, allocator: Allocator) void {
-            while (!self.isEmpty()) {
+            while (self.head != null) {
                 const head = self.head.?;
                 self.head = head.next;
                 if (head.next) |new_head| {
