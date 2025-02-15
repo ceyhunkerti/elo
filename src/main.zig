@@ -2,6 +2,7 @@ const std = @import("std");
 const cli = @import("cli/cli.zig");
 const base = @import("base");
 const EndpointRegistry = base.EndpointRegistry;
+const CliParams = @import("cli/commons.zig").Params;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -18,7 +19,7 @@ pub fn main() !void {
     var cmd = try cli.init(allocator);
     defer cmd.deinit();
 
-    var params = cli.Params{ .endpoint_registry = &registry };
+    var params = CliParams{ .endpoint_registry = &registry };
     try cmd.parse();
 
     _ = try cmd.run(&params);

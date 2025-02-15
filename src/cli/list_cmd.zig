@@ -2,7 +2,7 @@ const std = @import("std");
 const argz = @import("argz");
 const base = @import("base");
 const Command = argz.Command;
-const Params = base.Params;
+const Params = @import("commons.zig").Params;
 
 pub fn init(allocator: std.mem.Allocator) !Command {
     var list = Command.init(allocator, "list", null);
