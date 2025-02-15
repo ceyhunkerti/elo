@@ -192,15 +192,27 @@ pub fn start(self: Copy) !void {
 }
 
 pub fn end(self: Copy) !void {
-    std.debug.print("Copy end\n", .{});
     if (c.PQputCopyEnd(self.conn.pg_conn, null) != 1) {
         std.debug.print("Failed to send COPY end signal\n", .{});
+        return error.Fail;
+    }
+
+    const result = c.PQgetResult(self.conn.pg_conn);
+    defer if (result != null) c.PQclear(result);
+
+    if (result == null) {
+        return error.Fail;
+    }
+
+    const status = c.PQresultStatus(result);
+    if (status != c.PGRES_COMMAND_OK) {
+        const err_msg = c.PQresultErrorMessage(result);
+        std.debug.print("COPY failed: {s}\n", .{err_msg});
         return error.Fail;
     }
 }
 
 pub fn flush(self: Copy) !void {
-    std.debug.print("Copy flush\n", .{});
     if (c.PQputCopyData(self.conn.pg_conn, @ptrCast(self.data.items.ptr), @intCast(self.data.items.len)) != 1) {
         std.debug.print("Failed to send COPY data: {s}\n", .{self.conn.errorMessage()});
         return error.Fail;
@@ -215,9 +227,7 @@ pub fn copy(self: *Copy, record: *b.Record, formatter: b.RecordFormatter) !void 
 
     self.batch_index += 1;
 
-    std.debug.print("batch-size: {d}, batch-index: {d}\n", .{ self.batch_size, self.batch_index });
     if (self.batch_index >= self.batch_size) {
-        std.debug.print("\n{s}\n", .{self.data.items});
         try self.flush();
         self.batch_index = 0;
         self.data.clearRetainingCapacity();
