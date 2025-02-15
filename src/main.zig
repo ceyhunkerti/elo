@@ -15,7 +15,7 @@ pub fn main() !void {
     try register(&registry);
     defer registry.deinit();
 
-    const cmd = try cli.init(allocator);
+    var cmd = try cli.init(allocator);
     defer cmd.deinit();
 
     var params = cli.Params{ .endpoint_registry = &registry };

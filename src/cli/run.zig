@@ -12,7 +12,7 @@ pub const Error = error{
 fn getOptionValueMap(
     allocator: std.mem.Allocator,
     prefix: []const u8,
-    options: std.ArrayList(*argz.Option),
+    options: std.ArrayList(argz.Option),
 ) !std.StringHashMap([]const u8) {
     var map = std.StringHashMap([]const u8).init(allocator);
     for (options.items) |option| {
@@ -29,7 +29,7 @@ fn getOptionValueMap(
 
 pub fn run(cmd: *const Command, args: ?*anyopaque) anyerror!i32 {
     const params: *Params = @ptrCast(@alignCast(args));
-    const options: std.ArrayList(*argz.Option) = cmd.options orelse {
+    const options: std.ArrayList(argz.Option) = cmd.options orelse {
         return error.OptionsRequired;
     };
 
