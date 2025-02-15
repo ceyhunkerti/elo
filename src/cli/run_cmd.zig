@@ -1,13 +1,37 @@
 const std = @import("std");
-const base = @import("base");
 const argz = @import("argz");
+const base = @import("base");
 const Command = argz.Command;
-const Params = @import("cli.zig").Params;
-const EndpointRegistry = base.EndpointRegistry;
+const Params = @import("commons.zig").Params;
 
 pub const Error = error{
     OptionsRequired,
 } || argz.Error || base.RegistryError;
+
+pub fn init(allocator: std.mem.Allocator) !Command {
+    var run_cmd = Command.init(allocator, "run", struct {
+        fn run(cmd: *const Command, args: ?*anyopaque) anyerror!i32 {
+            return doRun(cmd, args);
+        }
+    }.run);
+    run_cmd.allow_unknown_options = true;
+
+    try run_cmd.addOption(try argz.Option.init(
+        allocator,
+        .String,
+        &.{"source"},
+        "source endpoint name",
+    ));
+
+    try run_cmd.addOption(try argz.Option.init(
+        allocator,
+        .String,
+        &.{"sink"},
+        "sink endpoint name",
+    ));
+
+    return run_cmd;
+}
 
 fn getOptionValueMap(
     allocator: std.mem.Allocator,
@@ -27,7 +51,7 @@ fn getOptionValueMap(
     return map;
 }
 
-pub fn run(cmd: *const Command, args: ?*anyopaque) anyerror!i32 {
+fn doRun(cmd: *const Command, args: ?*anyopaque) anyerror!i32 {
     const params: *Params = @ptrCast(@alignCast(args));
     const options: std.ArrayList(argz.Option) = cmd.options orelse {
         return error.OptionsRequired;
