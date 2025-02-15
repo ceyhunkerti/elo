@@ -79,6 +79,7 @@ pub fn write(self: *Writer, wire: *Wire) !void {
         self.options.copy_options,
         self.options.batch_size,
     );
+    defer copy.deinit();
     try copy.start();
 
     while (true) {

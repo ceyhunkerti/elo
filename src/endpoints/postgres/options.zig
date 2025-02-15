@@ -118,7 +118,7 @@ pub const SinkOptions = struct {
             } else break :mode .Append;
         };
         const batch_size = batch_size: {
-            if (map.get("batch_size")) |bs| {
+            if (map.get("batch-size")) |bs| {
                 break :batch_size std.fmt.parseInt(u32, bs, 10) catch {
                     return Error.InvalidBatchSize;
                 };

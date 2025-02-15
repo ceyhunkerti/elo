@@ -56,7 +56,9 @@ pub const Value = union(FieldType) {
         switch (self) {
             .Bytes => |bytes| if (bytes) |b| try result.appendSlice(b) else try result.appendSlice(""),
             .Int => |num| if (num) |n| try result.writer().print("{d}", .{n}) else try result.appendSlice(""),
-            .Double => |num| if (num) |n| try result.writer().print("{d}", .{n}) else try result.appendSlice(""),
+            .Double => |num| {
+                if (num) |n| try result.writer().print("{d}", .{n}) else try result.appendSlice("");
+            },
             .Boolean => |boolean| if (boolean) |b| try result.append(if (b) '1' else '0') else try result.append('0'),
             .TimeStamp => |timestamp| if (timestamp) |t| try t.write(result, formatter.time_format) else try result.appendSlice(""),
             else => {

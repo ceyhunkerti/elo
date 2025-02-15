@@ -133,6 +133,10 @@ pub fn init(
     };
 }
 
+pub fn deinit(self: Copy) void {
+    self.data.deinit();
+}
+
 pub fn command(self: Copy) ![]u8 {
     var list = std.ArrayList(u8).init(self.allocator);
     defer list.deinit();
@@ -188,6 +192,7 @@ pub fn start(self: Copy) !void {
 }
 
 pub fn end(self: Copy) !void {
+    std.debug.print("Copy end\n", .{});
     if (c.PQputCopyEnd(self.conn.pg_conn, null) != 1) {
         std.debug.print("Failed to send COPY end signal\n", .{});
         return error.Fail;
@@ -195,25 +200,28 @@ pub fn end(self: Copy) !void {
 }
 
 pub fn flush(self: Copy) !void {
+    std.debug.print("Copy flush\n", .{});
     if (c.PQputCopyData(self.conn.pg_conn, @ptrCast(self.data.items.ptr), @intCast(self.data.items.len)) != 1) {
         std.debug.print("Failed to send COPY data: {s}\n", .{self.conn.errorMessage()});
         return error.Fail;
     }
-    self.data.deinit();
 }
 
 pub fn copy(self: *Copy, record: *b.Record, formatter: b.RecordFormatter) !void {
-    if (self.data.items.len > 0) {
+    if (self.batch_index > 0) {
         try self.data.appendSlice("\n");
     }
     try record.write(&self.data, formatter);
 
     self.batch_index += 1;
 
+    std.debug.print("batch-size: {d}, batch-index: {d}\n", .{ self.batch_size, self.batch_index });
     if (self.batch_index >= self.batch_size) {
+        std.debug.print("\n{s}\n", .{self.data.items});
         try self.flush();
         self.batch_index = 0;
         self.data.clearRetainingCapacity();
+        try self.data.appendSlice("\n");
     }
 }
 
