@@ -5,10 +5,12 @@ const testing = std.testing;
 const Context = @import("Context.zig");
 const Statement = @import("Statement.zig");
 
+const log = std.log;
 const t = @import("testing/testing.zig");
 const c = @import("c.zig").c;
 
 pub const Error = error{
+    FailedToCreateConnection,
     UnknownConnectionMode,
     DpiBindVariableCreationError,
 };
@@ -76,7 +78,7 @@ pub fn init(
 pub fn deinit(self: *Connection) void {
     if (self.dpi_conn != null) {
         if (c.dpiConn_release(self.dpi_conn) < 0) {
-            std.debug.print("Failed to release connection with error: {s}\n", .{self.context.errorMessage()});
+            log.err("Failed to release connection with error: {s}\n", .{self.context.errorMessage()});
             unreachable;
         }
         self.dpi_conn = null;
@@ -118,7 +120,7 @@ pub fn connect(self: *Connection) !void {
         &create_params,
         &dpi_conn,
     ) < 0) {
-        std.debug.print("Failed to create connection with error: {s}\n", .{self.errorMessage()});
+        log.err("Failed to create connection with error: {s}\n", .{self.errorMessage()});
         return error.FailedToCreateConnection;
     }
 

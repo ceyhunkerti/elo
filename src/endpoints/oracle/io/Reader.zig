@@ -4,6 +4,7 @@ const std = @import("std");
 const Connection = @import("../Connection.zig");
 const SourceOptions = @import("../options.zig").SourceOptions;
 
+const log = std.log;
 const base = @import("base");
 const MessageFactory = base.MessageFactory;
 const Wire = base.Wire;
@@ -54,6 +55,7 @@ pub fn connect(self: *Reader) !void {
 
 pub fn run(self: *Reader, wire: *Wire) !void {
     errdefer |err| {
+        log.err("Encountered error: {s}. Sending interrupt to wire...\n", .{@errorName(err)});
         wire.interruptWithError(self.allocator, err);
     }
 
@@ -70,13 +72,16 @@ pub fn run(self: *Reader, wire: *Wire) !void {
 }
 
 pub fn read(self: *Reader, wire: *Wire) !void {
+    log.debug("Executing SQL: {s}\n", .{self.options.sql});
+
     var stmt = try self.conn.prepareStatement(self.options.sql);
     const column_count = try stmt.execute();
     while (true) {
         const record = try stmt.fetch(column_count) orelse break;
-        const msg = try record.asMessage(self.allocator);
-        wire.put(msg) catch |err| {
-            MessageFactory.destroy(self.allocator, msg);
+        const message = try record.asMessage(self.allocator);
+        wire.put(message) catch |err| {
+            log.err("Wire is interrupted with error {s}\n", .{@errorName(err)});
+            MessageFactory.destroy(self.allocator, message);
             return err;
         };
     }
