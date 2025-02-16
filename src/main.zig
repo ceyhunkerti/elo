@@ -2,8 +2,26 @@ const std = @import("std");
 const cli = @import("cli/cli.zig");
 const base = @import("base");
 const EndpointRegistry = base.EndpointRegistry;
-const CliParams = @import("cli/commons.zig").Params;
+const CliContext = @import("cli/context.zig").Context;
 const Allocator = std.mem.Allocator;
+
+pub const std_options: std.Options = .{
+    .logFn = logFn,
+    .log_level = .debug,
+};
+
+var log_level = std.log.default_level;
+
+fn logFn(
+    comptime message_level: std.log.Level,
+    comptime scope: @TypeOf(.enum_literal),
+    comptime format: []const u8,
+    args: anytype,
+) void {
+    if (@intFromEnum(message_level) <= @intFromEnum(log_level)) {
+        std.log.defaultLog(message_level, scope, format, args);
+    }
+}
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -19,7 +37,7 @@ pub fn main() !void {
     try registerEndpoints(&registry);
 
     _ = run(allocator, &registry) catch |err| {
-        std.debug.print("run failed: {s}\n", .{@errorName(err)});
+        std.log.err("Run failed: {s}\n", .{@errorName(err)});
         return;
     };
 }
@@ -28,7 +46,7 @@ fn run(allocator: Allocator, registry: *EndpointRegistry) !i32 {
     var cmd = try cli.init(allocator);
     defer cmd.deinit();
 
-    var params = CliParams{ .endpoint_registry = registry };
+    var params = CliContext{ .endpoint_registry = registry, .log_level = &log_level };
     try cmd.parse();
 
     return try cmd.run(&params);

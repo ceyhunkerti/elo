@@ -5,8 +5,7 @@ const Command = argz.Command;
 const BaseSource = base.Source;
 const BaseSink = base.Sink;
 const EndpointRegistry = base.EndpointRegistry;
-const commons = @import("commons.zig");
-const Params = commons.Params;
+const Context = @import("context.zig").Context;
 const Argument = argz.Argument;
 
 pub fn init(allocator: std.mem.Allocator) !*Command {
@@ -14,15 +13,15 @@ pub fn init(allocator: std.mem.Allocator) !*Command {
     info.description = "Endpoint options info";
 
     const source = Command.init(allocator, "source", struct {
-        fn run(cmd: *const Command, args: ?*anyopaque) anyerror!i32 {
-            const params: *Params = @ptrCast(@alignCast(args));
+        fn run(cmd: *const Command, ctx: ?*anyopaque) anyerror!i32 {
+            const context: *Context = @ptrCast(@alignCast(ctx));
             if (cmd.arguments) |arguments| {
                 const name = try arguments.items[0].getString() orelse {
                     std.debug.print("Missing required argument SOURCE_NAME\n", .{});
                     return error.Fail;
                 };
 
-                const source: BaseSource = params.endpoint_registry.sources.get(name) orelse {
+                const source: BaseSource = context.endpoint_registry.sources.get(name) orelse {
                     std.debug.print("Unknown source endpoint: [{s}]\n", .{name});
                     return error.Fail;
                 };
@@ -48,15 +47,15 @@ pub fn init(allocator: std.mem.Allocator) !*Command {
     try info.addCommand(source);
 
     const sink = Command.init(allocator, "sink", struct {
-        fn run(cmd: *const Command, args: ?*anyopaque) anyerror!i32 {
-            const params: *Params = @ptrCast(@alignCast(args));
+        fn run(cmd: *const Command, ctx: ?*anyopaque) anyerror!i32 {
+            const context: *Context = @ptrCast(@alignCast(ctx));
             if (cmd.arguments) |arguments| {
                 const name = try arguments.items[0].getString() orelse {
                     std.debug.print("Missing required argument SINK_NAME\n", .{});
                     return error.Fail;
                 };
 
-                const sink: BaseSink = params.endpoint_registry.sinks.get(name) orelse {
+                const sink: BaseSink = context.endpoint_registry.sinks.get(name) orelse {
                     std.debug.print("Unknown sink endpoint: [{s}]\n", .{name});
                     return error.Fail;
                 };

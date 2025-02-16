@@ -2,7 +2,7 @@ const std = @import("std");
 const argz = @import("argz");
 const base = @import("base");
 const Command = argz.Command;
-const Params = @import("commons.zig").Params;
+const Context = @import("context.zig").Context;
 
 pub const Error = error{
     OptionsRequired,
@@ -10,8 +10,8 @@ pub const Error = error{
 
 pub fn init(allocator: std.mem.Allocator) !*Command {
     var run_cmd = Command.init(allocator, "run", struct {
-        fn run(cmd: *const Command, args: ?*anyopaque) anyerror!i32 {
-            return doRun(cmd, args);
+        fn run(cmd: *const Command, ctx: ?*anyopaque) anyerror!i32 {
+            return doRun(cmd, ctx);
         }
     }.run);
     run_cmd.description = "Run data transfer";
@@ -34,8 +34,8 @@ pub fn init(allocator: std.mem.Allocator) !*Command {
     return run_cmd;
 }
 
-fn doRun(cmd: *const Command, args: ?*anyopaque) anyerror!i32 {
-    const params: *Params = @ptrCast(@alignCast(args));
+fn doRun(cmd: *const Command, ctx: ?*anyopaque) anyerror!i32 {
+    const context: *Context = @ptrCast(@alignCast(ctx));
     const options: std.ArrayList(argz.Option) = cmd.options orelse {
         return error.OptionsRequired;
     };
@@ -47,8 +47,8 @@ fn doRun(cmd: *const Command, args: ?*anyopaque) anyerror!i32 {
     const sink_name = sink_op.getString() orelse return error.OptionsRequired;
 
     // deinitialized when registry is deinitialized
-    var source: base.Source = try params.endpoint_registry.getSource(source_name);
-    var sink: base.Sink = try params.endpoint_registry.getSink(sink_name);
+    var source: base.Source = try context.endpoint_registry.getSource(source_name);
+    var sink: base.Sink = try context.endpoint_registry.getSink(sink_name);
 
     var source_options = std.StringHashMap([]const u8).init(cmd.allocator);
     var sink_options = std.StringHashMap([]const u8).init(cmd.allocator);
