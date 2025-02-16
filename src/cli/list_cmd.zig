@@ -4,10 +4,11 @@ const base = @import("base");
 const Command = argz.Command;
 const Params = @import("commons.zig").Params;
 
-pub fn init(allocator: std.mem.Allocator) !Command {
+pub fn init(allocator: std.mem.Allocator) !*Command {
     var list = Command.init(allocator, "list", null);
+    list.description = "List endpoints";
 
-    var sources = Command.init(allocator, "sources", struct {
+    const sources = Command.init(allocator, "sources", struct {
         fn run(_: *const Command, args: ?*anyopaque) anyerror!i32 {
             const params: *Params = @ptrCast(@alignCast(args));
             var it = params.endpoint_registry.sources.keyIterator();
@@ -18,7 +19,7 @@ pub fn init(allocator: std.mem.Allocator) !Command {
             return 0;
         }
     }.run);
-    var sinks = Command.init(allocator, "sinks", struct {
+    const sinks = Command.init(allocator, "sinks", struct {
         fn run(_: *const Command, args: ?*anyopaque) anyerror!i32 {
             const params: *Params = @ptrCast(@alignCast(args));
             var it = params.endpoint_registry.sinks.keyIterator();
@@ -30,8 +31,8 @@ pub fn init(allocator: std.mem.Allocator) !Command {
         }
     }.run);
 
-    try list.addCommand(&sources);
-    try list.addCommand(&sinks);
+    try list.addCommand(sources);
+    try list.addCommand(sinks);
 
     return list;
 }

@@ -9,9 +9,11 @@ const commons = @import("commons.zig");
 const Params = commons.Params;
 const Argument = argz.Argument;
 
-pub fn init(allocator: std.mem.Allocator) !Command {
+pub fn init(allocator: std.mem.Allocator) !*Command {
     var info = Command.init(allocator, "info", null);
-    var source = Command.init(allocator, "source", struct {
+    info.description = "Endpoint options info";
+
+    const source = Command.init(allocator, "source", struct {
         fn run(cmd: *const Command, args: ?*anyopaque) anyerror!i32 {
             const params: *Params = @ptrCast(@alignCast(args));
             if (cmd.arguments) |arguments| {
@@ -37,15 +39,15 @@ pub fn init(allocator: std.mem.Allocator) !Command {
     }.run);
     try source.addArgument(try Argument.init(
         allocator,
-        "name",
+        "NAME",
         Argument.Type.String,
         "Source name",
         null,
         true,
     ));
-    try info.addCommand(&source);
+    try info.addCommand(source);
 
-    var sink = Command.init(allocator, "sink", struct {
+    const sink = Command.init(allocator, "sink", struct {
         fn run(cmd: *const Command, args: ?*anyopaque) anyerror!i32 {
             const params: *Params = @ptrCast(@alignCast(args));
             if (cmd.arguments) |arguments| {
@@ -71,13 +73,13 @@ pub fn init(allocator: std.mem.Allocator) !Command {
     }.run);
     try sink.addArgument(try Argument.init(
         allocator,
-        "name",
+        "NAME",
         Argument.Type.String,
         "Sink name",
         null,
         true,
     ));
-    try info.addCommand(&sink);
+    try info.addCommand(sink);
 
     return info;
 }

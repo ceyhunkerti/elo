@@ -8,12 +8,13 @@ pub const Error = error{
     OptionsRequired,
 } || argz.Error || base.RegistryError;
 
-pub fn init(allocator: std.mem.Allocator) !Command {
+pub fn init(allocator: std.mem.Allocator) !*Command {
     var run_cmd = Command.init(allocator, "run", struct {
         fn run(cmd: *const Command, args: ?*anyopaque) anyerror!i32 {
             return doRun(cmd, args);
         }
     }.run);
+    run_cmd.description = "Run data transfer";
     run_cmd.allow_unknown_options = true;
 
     try run_cmd.addOption(try argz.Option.init(
@@ -33,24 +34,6 @@ pub fn init(allocator: std.mem.Allocator) !Command {
     return run_cmd;
 }
 
-fn getOptionValueMap(
-    allocator: std.mem.Allocator,
-    prefix: []const u8,
-    options: std.ArrayList(argz.Option),
-) !std.StringHashMap([]const u8) {
-    var map = std.StringHashMap([]const u8).init(allocator);
-    for (options.items) |option| {
-        for (option.names.items) |name| {
-            if (std.mem.startsWith(u8, name, prefix)) {
-                if (option.getString()) |value| {
-                    try map.put(name[prefix.len..], value);
-                }
-            }
-        }
-    }
-    return map;
-}
-
 fn doRun(cmd: *const Command, args: ?*anyopaque) anyerror!i32 {
     const params: *Params = @ptrCast(@alignCast(args));
     const options: std.ArrayList(argz.Option) = cmd.options orelse {
@@ -67,10 +50,24 @@ fn doRun(cmd: *const Command, args: ?*anyopaque) anyerror!i32 {
     var source: base.Source = try params.endpoint_registry.getSource(source_name);
     var sink: base.Sink = try params.endpoint_registry.getSink(sink_name);
 
-    var source_options = try getOptionValueMap(cmd.allocator, "source-", options);
+    var source_options = std.StringHashMap([]const u8).init(cmd.allocator);
+    var sink_options = std.StringHashMap([]const u8).init(cmd.allocator);
     defer source_options.deinit();
-    var sink_options = try getOptionValueMap(cmd.allocator, "sink-", options);
     defer sink_options.deinit();
+
+    // get source and sink options.
+    // source options starts with source- and sink options starts with sink-.
+    for (options.items) |option| for (option.names.items) |name| {
+        if (std.mem.startsWith(u8, name, "source-")) {
+            if (option.getString()) |value| {
+                try source_options.put(name["source-".len..], value);
+            }
+        } else if (std.mem.startsWith(u8, name, "sink-")) {
+            if (option.getString()) |value| {
+                try sink_options.put(name["sink-".len..], value);
+            }
+        }
+    };
 
     try source.prepare(source_options);
     try sink.prepare(sink_options);
