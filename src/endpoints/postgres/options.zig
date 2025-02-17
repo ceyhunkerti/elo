@@ -64,6 +64,7 @@ pub const SourceOptions = struct {
     connection: ConnectionOptions,
     sql: [:0]const u8,
     fetch_size: u32 = 10_000,
+    parallel: u16 = 1,
 
     pub fn fromMap(allocator: std.mem.Allocator, map: std.StringHashMap([]const u8)) !SourceOptions {
         const sql = map.get("sql") orelse return Error.SqlNotFound;
@@ -96,6 +97,7 @@ pub const SourceOptions = struct {
             \\
             \\--fetch_size [OPTIONAL - defaults to 10_000]
             \\
+            \\--parallel [OPTIONAL - defaults to 1]
         );
     }
 };
@@ -107,6 +109,7 @@ pub const SinkOptions = struct {
     mode: SinkMode = .Append,
     copy_options: ?CopyOptions = null,
     batch_size: u32 = 10_000,
+    parallel: u16 = 1,
 
     pub fn fromMap(allocator: std.mem.Allocator, map: std.StringHashMap([]const u8)) !SinkOptions {
         const table = map.get("table") orelse return Error.TableNameNotFound;

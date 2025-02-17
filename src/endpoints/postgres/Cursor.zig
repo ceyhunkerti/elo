@@ -63,13 +63,13 @@ row_count: u32 = 0,
 row_index: u32 = 0,
 total_row_count: usize = 0,
 
-pub fn init(allocator: std.mem.Allocator, conn: *Connection, name: []const u8, sql: []const u8) !Cursor {
+pub fn init(allocator: std.mem.Allocator, conn: *Connection, name: []const u8, sql: []const u8, fetch_size: ?u32) !Cursor {
     var cursor = Cursor{
         .allocator = allocator,
         .conn = conn,
         .name = allocator.dupe(u8, name) catch unreachable,
         .query = allocator.dupe(u8, sql) catch unreachable,
-        .fetch_query = try std.fmt.allocPrintZ(allocator, "FETCH {d} FROM {s}", .{ FETCH_SIZE, name }),
+        .fetch_query = try std.fmt.allocPrintZ(allocator, "FETCH {d} FROM {s}", .{ fetch_size orelse FETCH_SIZE, name }),
     };
     try cursor.declare();
     cursor.metadata = try cursor.findMetadata();

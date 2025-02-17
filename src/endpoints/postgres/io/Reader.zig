@@ -3,7 +3,8 @@ const Reader = @This();
 const std = @import("std");
 const Connection = @import("../Connection.zig");
 const Cursor = @import("../Cursor.zig");
-const SourceOptions = @import("../options.zig").SourceOptions;
+const Allocator = std.mem.Allocator;
+const constants = @import("../constants.zig");
 
 const c = @import("../c.zig").c;
 const base = @import("base");
@@ -11,69 +12,65 @@ const Wire = base.Wire;
 const MessageFactory = base.MessageFactory;
 const Record = base.Record;
 const Value = base.Value;
-const Term = base.Term;
 
+const log = std.log;
 const t = @import("../testing/testing.zig");
 
-allocator: std.mem.Allocator,
-conn: Connection,
-options: SourceOptions,
+const FETCH_SIZE = constants.FETCH_SIZE;
+const CURSOR_NAME = constants.CURSOR_NAME;
 
-pub fn init(allocator: std.mem.Allocator, options: SourceOptions) Reader {
+allocator: std.mem.Allocator,
+
+// connection. Each reader should have a separate connection.
+conn: *Connection,
+
+// sql to be executed on the connection.
+sql: []const u8,
+
+// reader index. Used to identify reader in parallel sessions.
+reader_index: u16,
+
+fetch_size: u32 = FETCH_SIZE,
+
+// cursor name is in the for of [CURSOR_NAME]_{reader_index}
+cursor_name: []const u8,
+
+pub fn init(allocator: Allocator, reader_index: u16, conn: *Connection, sql: []const u8, fetch_size: ?u32) Reader {
     return .{
         .allocator = allocator,
-        .options = options,
-        .conn = Connection.init(
-            allocator,
-            options.connection.username,
-            options.connection.password,
-            options.connection.host,
-            options.connection.database,
-        ),
+        .reader_index = reader_index,
+        .conn = conn,
+        .sql = sql,
+        .fetch_size = fetch_size orelse FETCH_SIZE,
+        .cursor_name = std.fmt.allocPrint(allocator, "{s}_{d}", .{ CURSOR_NAME, reader_index }) catch unreachable,
     };
 }
+
 pub fn deinit(self: *Reader) void {
-    self.conn.deinit();
-}
-
-pub fn info(allocator: std.mem.Allocator) ![]const u8 {
-    var output = std.ArrayList(u8).init(allocator);
-    defer output.deinit();
-    try SourceOptions.help(&output);
-    return try output.toOwnedSlice();
-}
-
-pub fn connect(self: *Reader) !void {
-    try self.conn.connect();
+    self.allocator.free(self.cursor_name);
+    self.conn.deinit(self.allocator);
+    self.allocator.destroy(self.conn);
 }
 
 pub fn run(self: *Reader, wire: *Wire) !void {
+    log.debug("Starting Reader.run for reader {d} with SQL {s}", .{ self.reader_index, self.sql });
+    wire.startProducer();
+    defer wire.stopProducer();
+
     errdefer |err| {
         wire.interruptWithError(self.allocator, err);
     }
 
-    if (!self.conn.isConnected()) {
-        try self.connect();
-    }
-
-    const cursor_name = "elo_cursor";
-
     try self.conn.beginTransaction();
-    defer self.conn.endTransaction() catch unreachable;
 
-    var cursor = try self.conn.createCursor(cursor_name, self.options.sql);
-    defer {
-        cursor.close() catch unreachable;
-        cursor.deinit();
-    }
-
+    var cursor = try self.conn.createCursor(self.cursor_name, self.sql, self.fetch_size);
     try self.read(wire, &cursor);
 
-    const terminator = Term(self.allocator);
-    return wire.put(terminator) catch |err| put: {
-        MessageFactory.destroy(self.allocator, terminator);
-        break :put err;
-    };
+    {
+        try self.conn.endTransaction();
+        try cursor.close();
+        cursor.deinit();
+    }
 }
 
 fn read(self: *Reader, wire: *Wire, cursor: *Cursor) !void {
@@ -113,7 +110,7 @@ test "Reader.run" {
     defer reader.deinit();
 
     try reader.connect();
-    var wire = Wire.init();
+    var wire = Wire.init(1, 1);
     try reader.run(&wire);
 
     const message = try wire.get();

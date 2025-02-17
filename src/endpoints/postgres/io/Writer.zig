@@ -5,6 +5,7 @@ const Connection = @import("../Connection.zig");
 const SinkOptions = @import("../options.zig").SinkOptions;
 const Copy = @import("../Copy.zig");
 
+const log = std.log;
 const c = @import("../c.zig").c;
 const t = @import("../testing/testing.zig");
 const base = @import("base");
@@ -14,43 +15,41 @@ const RecordFormatter = base.RecordFormatter;
 const Record = base.Record;
 const Value = base.Value;
 const Term = base.Term;
+const constants = @import("../constants.zig");
+const BATCH_WRITE_SIZE = constants.BATCH_WRITE_SIZE;
 
 allocator: std.mem.Allocator,
-conn: Connection = undefined,
-options: SinkOptions,
+writer_index: u16,
 
-pub fn init(allocator: std.mem.Allocator, options: SinkOptions) Writer {
+conn: *Connection,
+batch_size: u32 = BATCH_WRITE_SIZE,
+table_name: []const u8,
+columns: ?[]const []const u8,
+copy_options: ?Copy.Options,
+
+pub fn init(
+    allocator: std.mem.Allocator,
+    writer_index: u16,
+    conn: *Connection,
+    table_name: []const u8,
+    columns: ?[]const []const u8,
+    batch_size: ?u32,
+    copy_options: ?Copy.Options,
+) Writer {
     return .{
         .allocator = allocator,
-        .options = options,
-        .conn = Connection.init(
-            allocator,
-            options.connection.username,
-            options.connection.password,
-            options.connection.host,
-            options.connection.database,
-        ),
+        .writer_index = writer_index,
+        .conn = conn,
+        .table_name = table_name,
+        .columns = columns,
+        .batch_size = batch_size orelse BATCH_WRITE_SIZE,
+        .copy_options = copy_options,
     };
-}
-pub fn deinit(self: *Writer) void {
-    self.conn.deinit();
-}
-
-pub fn connect(self: *Writer) !void {
-    return try self.conn.connect();
-}
-
-pub fn info(allocator: std.mem.Allocator) ![]const u8 {
-    var output = std.ArrayList(u8).init(allocator);
-    defer output.deinit();
-    try SinkOptions.help(&output);
-    return try output.toOwnedSlice();
 }
 
 fn getRecordFormatter(self: Writer) RecordFormatter {
-    const options = self.options;
     var record_formatter = RecordFormatter{};
-    if (options.copy_options) |co| {
+    if (self.copy_options) |co| {
         record_formatter.delimiters.field_delimiter = if (co.delimiter[0] == '\'' and co.delimiter[co.delimiter.len - 1] == '\'')
             co.delimiter[1 .. co.delimiter.len - 1]
         else
@@ -60,6 +59,11 @@ fn getRecordFormatter(self: Writer) RecordFormatter {
 }
 
 pub fn run(self: *Writer, wire: *Wire) !void {
+    log.debug("Starting Writer.run for writer {d}", .{self.writer_index});
+
+    wire.startConsumer();
+    defer wire.stopConsumer();
+
     errdefer |err| {
         wire.interruptWithError(self.allocator, err);
     }
@@ -74,10 +78,10 @@ pub fn write(self: *Writer, wire: *Wire) !void {
     var copy = Copy.init(
         self.allocator,
         &self.conn,
-        self.options.table,
-        self.options.columns,
-        self.options.copy_options,
-        self.options.batch_size,
+        self.table_name,
+        self.columns,
+        self.copy_options,
+        self.batch_size,
     );
     defer copy.deinit();
     try copy.start();
@@ -108,7 +112,7 @@ test "Writer.run" {
             .host = tp.host,
             .database = tp.database,
         },
-        .table = "TEST_WRITER_RUN_01",
+        .table_name = "TEST_WRITER_RUN_01",
         .mode = .Truncate,
         .columns = &.{ "ID", "NAME" },
         .copy_options = .{

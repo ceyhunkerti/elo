@@ -4,10 +4,18 @@ const builtin = @import("builtin");
 const assert = std.debug.assert;
 const testing = std.testing;
 
+const log = std.log;
 const p = @import("proto/proto.zig");
 const Metadata = p.Metadata;
 const Record = p.Record;
 const Value = p.Value;
+
+pub const Error = error{
+    ProducersNotSet,
+    ConsumersNotSet,
+    InvalidConsumerCount,
+    InvalidProducerCount,
+};
 
 pub fn AtomicBlockingQueue(comptime T: type) type {
     return struct {
@@ -17,16 +25,69 @@ pub fn AtomicBlockingQueue(comptime T: type) type {
         cond: std.Thread.Condition,
         err: ?anyerror = null,
 
+        producers: u16,
+        consumers: u16,
+
+        active_producers: u16 = 0,
+        active_consumers: u16 = 0,
+
         pub const Self = @This();
         pub const Node = std.DoublyLinkedList(T).Node;
 
-        pub fn init() Self {
+        pub fn init(producers: u16, consumers: u16) Self {
             return Self{
                 .head = null,
                 .tail = null,
                 .mutex = std.Thread.Mutex{},
                 .cond = std.Thread.Condition{},
+                .producers = producers,
+                .consumers = consumers,
             };
+        }
+
+        pub fn startConsumer(self: *Self) void {
+            self.mutex.lock();
+            defer self.mutex.unlock();
+            self.active_consumers += 1;
+            assert(self.active_consumers <= self.consumers);
+        }
+
+        pub fn stopConsumer(self: *Self) !void {
+            self.mutex.lock();
+            defer self.mutex.unlock();
+            self.active_consumer -= 1;
+            assert(self.active_consumers >= 0);
+        }
+
+        pub fn startProducer(self: *Self) void {
+            self.mutex.lock();
+            defer self.mutex.unlock();
+            self.active_producers += 1;
+            assert(self.active_producers <= self.producers);
+        }
+        pub fn stopProducer(self: *Self) !void {
+            self.mutex.lock();
+            defer self.mutex.unlock();
+            self.active_producers -= 1;
+            assert(self.active_producers >= 0);
+
+            // if no more producers left broadcast termination message
+            if (self.active_producers == 0) {
+                for (0..self.consumers) |_| {
+                    self.put(Term(self.allocator));
+                }
+            }
+        }
+
+        pub fn validate(self: Self) !void {
+            if (self.producers == 0) {
+                log.err("Producer count is not set\n", .{});
+                return Error.ProducersNotSet;
+            }
+            if (self.consumers == 0) {
+                log.err("Consumer count is not set\n", .{});
+                return Error.ConsumersNotSet;
+            }
         }
 
         pub fn drain(self: *Self, allocator: Allocator) void {
@@ -42,6 +103,7 @@ pub fn AtomicBlockingQueue(comptime T: type) type {
                 head.next = null;
                 MessageFactory.destroy(allocator, head);
             }
+            self.message_count = 0;
         }
 
         pub fn interruptWithError(self: *Self, allocator: Allocator, err: anyerror) void {
@@ -52,13 +114,12 @@ pub fn AtomicBlockingQueue(comptime T: type) type {
         }
 
         pub fn put(self: *Self, node: *Node) !void {
-            node.next = null;
-
             self.mutex.lock();
             defer self.mutex.unlock();
 
             if (self.err) |err| return err;
 
+            node.next = null;
             node.prev = self.tail;
             self.tail = node;
             if (node.prev) |prev_tail| {
@@ -67,7 +128,7 @@ pub fn AtomicBlockingQueue(comptime T: type) type {
                 assert(self.head == null);
                 self.head = node;
             }
-
+            self.message_count += 1;
             // Signal one or more waiting threads that an item is available
             self.cond.signal();
         }
@@ -79,7 +140,8 @@ pub fn AtomicBlockingQueue(comptime T: type) type {
 
             while (self.head == null) {
                 if (self.err) |err| return err;
-                self.cond.wait(&self.mutex);
+                if (self.producers == 0 and self.message_count)
+                    self.cond.wait(&self.mutex);
             }
 
             const head = self.head.?;
@@ -91,6 +153,9 @@ pub fn AtomicBlockingQueue(comptime T: type) type {
             }
             head.prev = null;
             head.next = null;
+
+            self.message_count -= 1;
+            assert(self.message_count >= 0);
             return head;
         }
 
@@ -100,8 +165,10 @@ pub fn AtomicBlockingQueue(comptime T: type) type {
             return self.head == null;
         }
 
-        pub fn dump(self: *Self) void {
-            self.dumpToStream(std.io.getStdErr().writer()) catch return;
+        pub fn isNewMessageExpected(self: *Self) bool {
+            self.mutex.lock();
+            defer self.mutex.unlock();
+            return self.message_count == 0 and self.producers == 0;
         }
     };
 }
@@ -134,13 +201,15 @@ test "Wire" {
 
     const producer = struct {
         pub fn producerThread(allocator_: Allocator, wire: *Wire) !void {
+            wire.startProducer();
+            defer wire.stopProducer();
             const m = try p.Record.Message(allocator_, &[_]p.Value{ .{ .Int = 1 }, .{ .Boolean = true } });
             try wire.put(m);
             try wire.put(Term(allocator_));
         }
     };
 
-    var wire = Wire.init();
+    var wire = Wire.init(1, 1);
 
     var producer_thread = try std.Thread.spawn(.{ .allocator = allocator }, producer.producerThread, .{ allocator, &wire });
 
@@ -163,7 +232,7 @@ test "Wire" {
 test "MessageQueue sync" {
     const allocator = testing.allocator;
 
-    var wire = Wire.init();
+    var wire = Wire.init(1, 1);
     const record = p.Record.fromSlice(allocator, &[_]p.Value{ .{ .Int = 1 }, .{ .Boolean = true } }) catch unreachable;
     try wire.put(record.asMessage(allocator) catch unreachable);
 

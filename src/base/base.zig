@@ -21,6 +21,6 @@ pub const FieldType = p.FieldType;
 pub const Timestamp = p.Timestamp;
 
 // utils
-pub const utils = @import("utils.zig");
-pub const fromMap = utils.fromMap;
-pub const fromMapOwned = utils.fromMapOwned;
+pub const utils = @import("utils/utils.zig");
+pub const QueryMetadata = utils.db.metadata.Query;
+pub const Column = utils.db.metadata.Column;

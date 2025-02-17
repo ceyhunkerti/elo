@@ -95,8 +95,8 @@ pub fn commit(self: Connection) !void {
     c.PQclear(res);
 }
 
-pub fn createCursor(self: *Connection, name: []const u8, sql: []const u8) !Cursor {
-    return try Cursor.init(self.allocator, self, name, sql);
+pub fn createCursor(self: *Connection, name: []const u8, sql: []const u8, fetch_size: ?u32) !Cursor {
+    return try Cursor.init(self.allocator, self, name, sql, fetch_size);
 }
 
 pub fn beginTransaction(self: Connection) !void {
