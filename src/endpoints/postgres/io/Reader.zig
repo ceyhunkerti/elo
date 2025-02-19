@@ -23,13 +23,7 @@ pub fn init(allocator: std.mem.Allocator, options: SourceOptions) Reader {
     return .{
         .allocator = allocator,
         .options = options,
-        .conn = Connection.init(
-            allocator,
-            options.connection.username,
-            options.connection.password,
-            options.connection.host,
-            options.connection.database,
-        ),
+        .conn = options.connection.toConnection(allocator),
     };
 }
 pub fn deinit(self: *Reader) void {
