@@ -4,6 +4,7 @@ const std = @import("std");
 const Connection = @import("../Connection.zig");
 const Cursor = @import("../Cursor.zig");
 const SourceOptions = @import("../options.zig").SourceOptions;
+const constants = @import("../constants.zig");
 
 const c = @import("../c.zig").c;
 const base = @import("base");
@@ -50,12 +51,10 @@ pub fn run(self: *Reader, wire: *Wire) !void {
         try self.connect();
     }
 
-    const cursor_name = "elo_cursor";
-
     try self.conn.beginTransaction();
     defer self.conn.endTransaction() catch unreachable;
 
-    var cursor = try self.conn.createCursor(cursor_name, self.options.sql);
+    var cursor = try self.conn.createCursor(constants.CURSOR_NAME, self.options.sql);
     defer {
         cursor.close() catch unreachable;
         cursor.deinit();
