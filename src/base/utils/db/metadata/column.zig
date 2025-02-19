@@ -10,7 +10,7 @@ pub fn TypeInfo(comptime T: type) type {
         nullable: ?bool = null,
         default: ?b.Value = null,
 
-        ext: ?T = null,
+        type_extension: ?T = null,
 
         pub fn toString(self: TypeInfo, allocator: std.mem.Allocator) ![]const u8 {
             var result = std.ArrayList(u8).init(allocator);
@@ -48,7 +48,7 @@ pub fn Column(comptime T: type) type {
                 if (ti.default) |d| d.deinit(self.allocator);
                 comptime {
                     if (@hasField(T, "deinit")) {
-                        if (self.type_info.?.ext) |ext| ext.deinit();
+                        if (self.type_info.?.type_extension) |ext| ext.deinit();
                     }
                 }
             }

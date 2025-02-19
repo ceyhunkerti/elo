@@ -1,6 +1,7 @@
 const std = @import("std");
 const c = @import("c.zig").c;
 const CopyOptions = @import("Copy.zig").Options;
+const Connection = @import("Connection.zig").Connection;
 
 const Error = error{
     HostNotFound,
@@ -22,6 +23,16 @@ pub const ConnectionOptions = struct {
     database: [:0]const u8,
     username: [:0]const u8,
     password: [:0]const u8,
+
+    pub fn toConnection(self: ConnectionOptions) Connection {
+        return Connection.init(
+            std.heap.c_allocator,
+            self.username,
+            self.password,
+            self.host,
+            self.database,
+        );
+    }
 
     pub fn fromMap(allocator: std.mem.Allocator, map: std.StringHashMap([]const u8)) !ConnectionOptions {
         const host = map.get("host") orelse return error.HostNotFound;

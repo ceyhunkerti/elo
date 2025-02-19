@@ -24,3 +24,4 @@ pub const Timestamp = p.Timestamp;
 pub const utils = @import("utils/utils.zig");
 pub const QueryMetadata = utils.db.metadata.Query;
 pub const Column = utils.db.metadata.Column;
+pub const helpers = utils.helpers;

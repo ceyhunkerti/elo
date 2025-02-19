@@ -12,7 +12,7 @@ pub fn findQueryMetadata(allocator: Allocator, conn: *Connection, query: [:0]con
     defer c.PQclear(res);
 
     if (c.PQresultStatus(res) != c.PGRES_TUPLES_OK) {
-        log.err("Error executing FETCH: {s}\n", .{e.resultError(res)});
+        log.err("Error executing SQL: {s}\n", .{e.resultError(res)});
         return error.Fail;
     }
 

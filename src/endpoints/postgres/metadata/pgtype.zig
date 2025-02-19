@@ -1,10 +1,14 @@
 const std = @import("std");
+const Allocator = std.mem.Allocator;
+
 const c = @import("../c.zig").c;
-const b = @import("base");
+const base = @import("base");
+const Value = base.Value;
+const Timestamp = base.Timestamp;
 
 const Error = error{invalidFormat};
 
-pub const PostgresType = enum(c.Oid) {
+pub const ColumnType = enum(c.Oid) {
     // Boolean
     bool = 16,
 
@@ -75,11 +79,11 @@ pub const PostgresType = enum(c.Oid) {
     tstzrange = 3910,
     daterange = 3912,
 
-    pub fn fromOid(oid: c.Oid) ?PostgresType {
-        return std.meta.intToEnum(PostgresType, oid) catch null;
+    pub fn fromOid(oid: c.Oid) ?ColumnType {
+        return std.meta.intToEnum(ColumnType, oid) catch null;
     }
 
-    pub fn toZigType(self: PostgresType) type {
+    pub fn toZigType(self: ColumnType) type {
         return switch (self) {
             .bool => bool,
             .int2 => i16,
@@ -96,20 +100,20 @@ pub const PostgresType = enum(c.Oid) {
         };
     }
 
-    pub fn isArray(self: PostgresType) bool {
+    pub fn isArray(self: ColumnType) bool {
         return switch (self) {
             .bool_array, .int2_array, .int4_array, .int8_array, .float4_array, .float8_array, .text_array, .varchar_array => true,
             else => false,
         };
     }
 
-    pub inline fn stringToValue(self: PostgresType, allocator: std.mem.Allocator, str: ?[]const u8) b.Value {
+    pub inline fn stringToValue(self: ColumnType, allocator: Allocator, str: ?[]const u8) Value {
         return switch (self) {
-            .bool => b.Value{ .Boolean = if (str) |s| std.mem.eql(u8, s, "t") else null },
-            .int2, .int4, .int8 => b.Value{ .Int = if (str) |s| std.fmt.parseInt(i64, s, 10) catch unreachable else null },
-            .numeric, .float4, .float8 => b.Value{ .Double = if (str) |s| std.fmt.parseFloat(f64, s) catch unreachable else null },
-            .varchar, .text => b.Value{ .Bytes = if (str) |s| allocator.dupe(u8, s) catch unreachable else null },
-            .timestamp, .date, .timetz, .timestamptz => b.Value{ .TimeStamp = b.Timestamp.fromString(str) catch unreachable },
+            .bool => Value{ .Boolean = if (str) |s| std.mem.eql(u8, s, "t") else null },
+            .int2, .int4, .int8 => Value{ .Int = if (str) |s| std.fmt.parseInt(i64, s, 10) catch unreachable else null },
+            .numeric, .float4, .float8 => Value{ .Double = if (str) |s| std.fmt.parseFloat(f64, s) catch unreachable else null },
+            .varchar, .text => Value{ .Bytes = if (str) |s| allocator.dupe(u8, s) catch unreachable else null },
+            .timestamp, .date, .timetz, .timestamptz => Value{ .TimeStamp = Timestamp.fromString(str) catch unreachable },
             else => {
                 std.debug.print("Unsupported type: {}\n", .{self});
                 unreachable;
@@ -118,12 +122,12 @@ pub const PostgresType = enum(c.Oid) {
     }
 };
 
-pub fn timestampFromString(str: ?[]const u8) !?b.Timestamp {
+pub fn timestampFromString(str: ?[]const u8) !?Timestamp {
     if (str == null) return null;
     const input = std.mem.trim(u8, str.?, &std.ascii.whitespace);
     if (input.len == 0) return null;
 
-    var result = b.Timestamp{
+    var result = Timestamp{
         .year = 0,
         .month = 1,
         .day = 1,
@@ -151,7 +155,7 @@ pub fn timestampFromString(str: ?[]const u8) !?b.Timestamp {
     return result;
 }
 
-fn parseDatePart(input: []const u8, result: *b.Timestamp) !void {
+fn parseDatePart(input: []const u8, result: *Timestamp) !void {
     if (input.len < 10) return error.InvalidFormat;
 
     result.year = try std.fmt.parseInt(i16, input[0..4], 10);
@@ -165,7 +169,7 @@ fn parseDatePart(input: []const u8, result: *b.Timestamp) !void {
     if (result.day < 1 or result.day > 31) return error.InvalidDay;
 }
 
-fn parseTimePart(input: []const u8, result: *b.Timestamp) !void {
+fn parseTimePart(input: []const u8, result: *Timestamp) !void {
     if (input.len < 8) return error.InvalidFormat;
 
     result.hour = try std.fmt.parseInt(u8, input[0..2], 10);

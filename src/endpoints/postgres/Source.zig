@@ -1,16 +1,21 @@
 const Source = @This();
 
 const std = @import("std");
-
 const base = @import("base");
-const Wire = base.Wire;
-const BaseSource = base.Source;
 const io = @import("io/io.zig");
 const opts = @import("options.zig");
-const SourceOptions = opts.SourceOptions;
 const Connection = @import("Connection.zig");
-const QueryMetadata = base.QueryMetadata;
 const metadata = @import("metadata/metadata.zig");
+
+const log = std.log;
+const Allocator = std.mem.Allocator;
+
+const Wire = base.Wire;
+const BaseSource = base.Source;
+const helpers = base.helpers;
+const QueryMetadata = base.QueryMetadata;
+
+const SourceOptions = opts.SourceOptions;
 
 const constants = @import("constants.zig");
 
@@ -19,11 +24,11 @@ pub const Error = error{
     OptionsRequired,
 };
 
-allocator: std.mem.Allocator,
+allocator: Allocator,
 options: ?SourceOptions = null,
 readers: ?[]io.Reader = null,
 
-pub fn init(allocator: std.mem.Allocator) Source {
+pub fn init(allocator: Allocator) Source {
     return .{ .allocator = allocator };
 }
 
@@ -55,31 +60,32 @@ pub fn get(self: *Source) BaseSource {
 
 pub fn prepare(ctx: *anyopaque, options: ?std.StringHashMap([]const u8)) anyerror!void {
     const self: *Source = @ptrCast(@alignCast(ctx));
-    if (options) |o| {
-        self.options = try SourceOptions.fromMap(self.allocator, o);
+    if (options == null) return Error.OptionsRequired;
 
-        self.readers = self.allocator.alloc(io.Reader, self.options.?.parallel);
+    self.options = try SourceOptions.fromMap(self.allocator, options.?);
 
-        for (0..self.options.?.parallel) |i| {
-            const conn = try self.allocator.create(Connection);
-            conn.* = Connection.init(
-                self.allocator,
-                self.options.?.connection.username,
-                self.options.?.connection.password,
-                self.options.?.connection.host,
-                self.options.?.connection.database,
-            );
-            const reader = io.Reader.init(
-                self.allocator,
-                @intCast(i + 1),
-                conn,
-                self.options.?.sql,
-                self.options.?.fetch_size,
-            );
-            self.readers[i] = reader;
-        }
-    } else {
-        return Error.OptionsRequired;
+    const qmd = try self.findQueryMetadata();
+    defer qmd.deinit();
+
+    const chunks = try qmd.chunks(self.options.?.parallel);
+
+    if (chunks.len < self.options.?.parallel) {
+        log.warn("Not enough rows for parallel execution. Using {d} threads", .{chunks.len});
+    }
+
+    self.readers = self.allocator.alloc(io.Reader, chunks.len);
+
+    for (chunks) |i| {
+        const conn = try self.allocator.create(Connection);
+        conn.* = self.options.?.connection.toConnection();
+        const reader = io.Reader.init(
+            self.allocator,
+            @intCast(i + 1),
+            conn,
+            self.options.?.sql,
+            self.options.?.fetch_size,
+        );
+        self.readers[i] = reader;
     }
 }
 
@@ -101,13 +107,7 @@ pub fn info(ctx: *anyopaque) anyerror![]const u8 {
 }
 
 fn findQueryMetadata(self: *Source) !metadata.QueryMetadata {
-    var conn = Connection.init(
-        self.allocator,
-        self.options.?.connection.username,
-        self.options.?.connection.password,
-        self.options.?.connection.host,
-        self.options.?.connection.database,
-    );
+    var conn = self.options.?.connection.toConnection();
     defer conn.deinit();
     try conn.connect();
 
